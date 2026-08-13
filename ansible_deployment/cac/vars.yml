@@ -205,13 +205,14 @@ controller_templates:
     credentials:
       - "ServiceNow PDI"
 
-  - name: "Auto-approve Workflow"
-    description: "Auto-approve pending AAP workflow node (triggered by EDA on ServiceNow CR approval)"
+  - name: "Bridge CR Approval"
+    description: "Relay ServiceNow CR approval to the paused AAP workflow node"
     organization: "Default"
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/approve_pending_workflow.yml"
     inventory: "Patching Demo"
+    ask_variables_on_launch: true
     credentials:
       - "AAP Controller"
 

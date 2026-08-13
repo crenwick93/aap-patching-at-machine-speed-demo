@@ -37,9 +37,13 @@
           - short_description
         sysparm_query: "approval=approved^state!=implement^short_descriptionLIKEEmergency kpatch"
   rules:
-    - name: Emergency CR approved — auto-approve AAP workflow
+    - name: Emergency CR approved — relay approval to AAP
       condition: event.approval == "approved"
       action:
         run_job_template:
-          name: "Auto-approve Workflow"
+          name: "Bridge CR Approval"
           organization: Default
+          job_args:
+            extra_vars:
+              cr_number: "{{ event.number }}"
+              cr_sys_id: "{{ event.sys_id }}"

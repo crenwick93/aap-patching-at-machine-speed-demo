@@ -1,5 +1,5 @@
 ---
-- name: Auto-approve Pending Workflow
+- name: Bridge CR Approval to AAP Workflow
   hosts: localhost
   connection: local
   gather_facts: false
@@ -10,6 +10,11 @@
     controller_verify: "{{ lookup('env', 'CONTROLLER_VERIFY_SSL') | default('false') | bool }}"
 
   tasks:
+    - name: Fail if no CR number provided
+      ansible.builtin.assert:
+        that: cr_number is defined
+        fail_msg: "cr_number must be provided to match the correct workflow approval"
+
     - name: Find pending workflow approvals
       ansible.builtin.uri:
         url: "{{ controller_url }}/api/controller/v2/workflow_approvals/?status=pending"
@@ -19,22 +24,44 @@
         return_content: true
       register: pending
 
-    - name: Approve pending workflow nodes
+    - name: Get parent workflow job for each pending approval
       ansible.builtin.uri:
-        url: "{{ controller_url }}/api/controller/v2/workflow_approvals/{{ item.id }}/approve/"
+        url: "{{ controller_url }}/api/controller/v2/workflow_jobs/{{ item.summary_fields.workflow_job.id }}/"
+        headers:
+          Authorization: "Bearer {{ controller_token }}"
+        validate_certs: "{{ controller_verify }}"
+        return_content: true
+      loop: "{{ pending.json.results }}"
+      loop_control:
+        label: "approval {{ item.id }} (workflow job {{ item.summary_fields.workflow_job.id }})"
+      register: workflow_jobs
+      when: pending.json.count > 0
+
+    - name: Identify the approval matching this CR
+      ansible.builtin.set_fact:
+        matching_approval_id: "{{ item.item.id }}"
+      loop: "{{ workflow_jobs.results | default([]) }}"
+      loop_control:
+        label: "workflow job {{ item.item.summary_fields.workflow_job.id | default('?') }}"
+      when:
+        - item.json is defined
+        - item.json.artifacts is defined
+        - cr_number in (item.json.artifacts | string)
+      no_log: false
+
+    - name: Approve the matching workflow node
+      ansible.builtin.uri:
+        url: "{{ controller_url }}/api/controller/v2/workflow_approvals/{{ matching_approval_id }}/approve/"
         method: POST
         headers:
           Authorization: "Bearer {{ controller_token }}"
         validate_certs: "{{ controller_verify }}"
         status_code: [200, 204]
-      loop: "{{ pending.json.results }}"
-      loop_control:
-        label: "{{ item.name | default('unnamed') }} (id: {{ item.id }})"
-      when: pending.json.count > 0
+      when: matching_approval_id is defined
 
     - name: Display result
       ansible.builtin.debug:
         msg: >-
-          {{ 'Approved ' ~ pending.json.count ~ ' pending workflow node(s) — production kpatch will proceed.'
-             if pending.json.count > 0
-             else 'No pending workflow approvals found.' }}
+          {{ 'ServiceNow CR ' ~ cr_number ~ ' approval relayed to AAP — production kpatch will proceed.'
+             if matching_approval_id is defined
+             else 'No pending workflow approval found matching CR ' ~ cr_number ~ '.' }}
