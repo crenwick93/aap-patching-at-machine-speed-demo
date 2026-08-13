@@ -5,6 +5,12 @@
   gather_facts: false
 
   tasks:
+    - name: Look up Trading Platform business service
+      servicenow.itsm.configuration_item_info:
+        query:
+          - name: = Trading Platform
+      register: biz_svc_lookup
+
     - name: Look up Trading Platform (Prod) in CMDB
       servicenow.itsm.configuration_item_info:
         query:
@@ -59,6 +65,7 @@
         other:
           parent: "{{ inc_sys_id | default(omit) }}"
           cmdb_ci: "{{ app_prod_lookup.records[0].sys_id | default(omit) }}"
+          business_service: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
       register: cr_result
 
     - name: Update Incident with CR reference

@@ -5,6 +5,12 @@
   gather_facts: false
 
   tasks:
+    - name: Look up Trading Platform business service
+      servicenow.itsm.configuration_item_info:
+        query:
+          - name: = Trading Platform
+      register: biz_svc_lookup
+
     - name: Create scheduled CR for follow-up full kernel update
       servicenow.itsm.change_request:
         type: standard
@@ -41,6 +47,7 @@
         category: Software
         other:
           parent: "{{ inc_sys_id | default(omit) }}"
+          business_service: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
       register: followup_cr
 
     - name: Display follow-up CR confirmation
