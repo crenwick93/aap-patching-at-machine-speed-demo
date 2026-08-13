@@ -9,10 +9,11 @@
       servicenow.itsm.change_request:
         sys_id: "{{ cr_sys_id }}"
         state: implement
-        work_notes: |
-          Remediation workflow triggered by EDA.
-          CR approved in ServiceNow — proceeding with patching.
-          Timestamp: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
+        other:
+          work_notes: |
+            Remediation workflow triggered by EDA.
+            CR approved in ServiceNow — proceeding with patching.
+            Timestamp: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
 
     - name: Display update confirmation
       ansible.builtin.debug:

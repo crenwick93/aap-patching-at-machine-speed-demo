@@ -64,10 +64,11 @@
     - name: Update Incident with CR reference
       servicenow.itsm.incident:
         sys_id: "{{ inc_sys_id }}"
-        work_notes: >-
-          Emergency CR {{ cr_result.record.number }} raised for production kpatch.
-          Canary deployment to dev completed successfully.
-          Awaiting CAB approval before production remediation proceeds.
+        other:
+          work_notes: >-
+            Emergency CR {{ cr_result.record.number }} raised for production kpatch.
+            Canary deployment to dev completed successfully.
+            Awaiting CAB approval before production remediation proceeds.
       when: inc_sys_id is defined
 
     - name: Display CR details

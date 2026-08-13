@@ -44,29 +44,30 @@
             4. Raise emergency CR for production
             5. Await approval, then kpatch production
             6. Update CMDB CIs with new kernel version
-        category: Software
-        subcategory: Operating System
         caller: "{{ servicenow_caller | default('aap-svc-crenwick') }}"
-        cmdb_ci: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
         other:
+          category: Software
+          subcategory: Operating System
+          cmdb_ci: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
           business_service: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
       register: inc_result
 
     - name: Add affected CIs as work note
       servicenow.itsm.incident:
         sys_id: "{{ inc_result.record.sys_id }}"
-        work_notes: |
-          Affected Configuration Items:
-          Dev environment:
-          - rhel-dev-01.{{ domain }}
-          - rhel-dev-02.{{ domain }}
-          - rhel-dev-03.{{ domain }}
-          Prod environment:
-          - rhel-prod-01.{{ domain }}
-          - rhel-prod-02.{{ domain }}
-          - rhel-prod-03.{{ domain }}
+        other:
+          work_notes: |
+            Affected Configuration Items:
+            Dev environment:
+            - rhel-dev-01.{{ domain }}
+            - rhel-dev-02.{{ domain }}
+            - rhel-dev-03.{{ domain }}
+            Prod environment:
+            - rhel-prod-01.{{ domain }}
+            - rhel-prod-02.{{ domain }}
+            - rhel-prod-03.{{ domain }}
 
-          Automated assessment in progress via AAP.
+            Automated assessment in progress via AAP.
 
     - name: Display Incident details
       ansible.builtin.debug:
