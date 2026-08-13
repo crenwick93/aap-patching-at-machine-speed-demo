@@ -22,6 +22,7 @@
           job_args:
             extra_vars:
               affected_host: "{{ event.payload.context.display_name | default('unknown') }}"
+              triggered_cve: "{{ event.payload.events[0].payload.reported_cve | default('Unknown') }}"
               cve_list: "{{ event.payload.events | map(attribute='payload.reported_cve') | list | default([]) }}"
               severity: "{{ event.payload.source.event_type.display_name | default('Critical') }}"
               advisory_id: "{{ event.payload.advisory_id | default('Unknown') }}"
