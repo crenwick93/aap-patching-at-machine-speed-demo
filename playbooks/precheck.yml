@@ -9,7 +9,7 @@
     boot_min_mb: "{{ precheck_boot_min_mb | default(100) }}"
     memory_min_mb: "{{ precheck_memory_min_mb | default(256) }}"
     load_max: "{{ precheck_load_max | default(4.0) }}"
-    critical_services: "{{ critical_services | default(['sshd', 'chronyd']) }}"
+    critical_services: "{{ precheck_critical_services | default(['sshd', 'chronyd']) }}"
 
   tasks:
     - name: Check root filesystem free space
