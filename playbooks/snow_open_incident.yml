@@ -14,6 +14,12 @@
           - name: = Trading Platform
       register: biz_svc_lookup
 
+    - name: Look up Trading Platform (Dev) application service
+      servicenow.itsm.configuration_item_info:
+        query:
+          - name: = Trading Platform (Dev)
+      register: app_dev_lookup
+
     - name: Create security Incident
       servicenow.itsm.incident:
         state: new
@@ -48,7 +54,7 @@
         other:
           category: Software
           subcategory: Operating System
-          cmdb_ci: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
+          cmdb_ci: "{{ app_dev_lookup.records[0].sys_id | default(omit) }}"
           business_service: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
       register: inc_result
 

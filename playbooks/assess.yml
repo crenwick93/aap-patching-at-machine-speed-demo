@@ -74,12 +74,22 @@
         fi
       args:
         creates: /usr/local/bin/syft
+      ignore_errors: true
+      register: syft_install
 
     - name: Generate pre-patch CycloneDX SBOM
       ansible.builtin.command: >
         syft packages dir:/ --catalogers rpm-db-cataloger
         -o cyclonedx-json
         --file {{ sbom_before_path | default('/tmp/sbom-before.json') }}
+      changed_when: true
+      when: syft_install is succeeded
+
+    - name: Fallback — generate RPM package list as SBOM
+      ansible.builtin.shell: >
+        rpm -qa --qf '{"name":"%{NAME}","version":"%{VERSION}-%{RELEASE}","arch":"%{ARCH}"}\n'
+        > {{ sbom_before_path | default('/tmp/sbom-before.json') }}
+      when: syft_install is failed
       changed_when: true
 
     - name: Publish assessment data
