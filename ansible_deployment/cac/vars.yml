@@ -9,7 +9,7 @@
 # Credentials
 # -----------------------------------------------------------------------------
 controller_credentials:
-  - name: "Colombo Demo SSH"
+  - name: "Demo SSH Key"
     description: "SSH access to demo EC2 instances (ec2-user)"
     organization: "Default"
     credential_type: "Machine"
@@ -59,7 +59,7 @@ controller_projects:
 # Inventories
 # -----------------------------------------------------------------------------
 controller_inventories:
-  - name: "Colombo Demo"
+  - name: "Patching Demo"
     description: "Demo RHEL instances — 3 dev + 3 prod, discovered dynamically from AWS EC2"
     organization: "Default"
 
@@ -68,7 +68,7 @@ controller_inventories:
 # -----------------------------------------------------------------------------
 controller_inventory_sources:
   - name: "AWS EC2 Discovery"
-    inventory: "Colombo Demo"
+    inventory: "Patching Demo"
     source: "ec2"
     credential: "AWS Demo"
     overwrite: true
@@ -99,10 +99,10 @@ controller_templates:
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/precheck.yml"
-    inventory: "Colombo Demo"
+    inventory: "Patching Demo"
     ask_limit_on_launch: true
     credentials:
-      - "Colombo Demo SSH"
+      - "Demo SSH Key"
 
   - name: "Assess Kernel Exposure"
     description: "Intelligence: kernel version, advisories, CVEs, kpatch eligibility, SBOM"
@@ -110,10 +110,10 @@ controller_templates:
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/assess.yml"
-    inventory: "Colombo Demo"
+    inventory: "Patching Demo"
     ask_limit_on_launch: true
     credentials:
-      - "Colombo Demo SSH"
+      - "Demo SSH Key"
 
   - name: "Apply Kpatch"
     description: "Live kernel patch — zero downtime, zero service interruption"
@@ -121,10 +121,10 @@ controller_templates:
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/patch.yml"
-    inventory: "Colombo Demo"
+    inventory: "Patching Demo"
     ask_limit_on_launch: true
     credentials:
-      - "Colombo Demo SSH"
+      - "Demo SSH Key"
 
   - name: "Validate and Audit"
     description: "Post-patch: service checks, SBOM diff, CI update, audit artefact"
@@ -132,11 +132,11 @@ controller_templates:
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/validate.yml"
-    inventory: "Colombo Demo"
+    inventory: "Patching Demo"
     ask_variables_on_launch: true
     ask_limit_on_launch: true
     credentials:
-      - "Colombo Demo SSH"
+      - "Demo SSH Key"
       - "ServiceNow PDI"
 
   - name: "Open Incident"
@@ -145,7 +145,7 @@ controller_templates:
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/snow_open_incident.yml"
-    inventory: "Colombo Demo"
+    inventory: "Patching Demo"
     ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
@@ -156,7 +156,7 @@ controller_templates:
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/snow_open_cr.yml"
-    inventory: "Colombo Demo"
+    inventory: "Patching Demo"
     ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
@@ -167,7 +167,7 @@ controller_templates:
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/snow_update_cr.yml"
-    inventory: "Colombo Demo"
+    inventory: "Patching Demo"
     ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
@@ -178,7 +178,7 @@ controller_templates:
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/snow_close_cr.yml"
-    inventory: "Colombo Demo"
+    inventory: "Patching Demo"
     ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
@@ -189,7 +189,7 @@ controller_templates:
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/snow_log_kpatch.yml"
-    inventory: "Colombo Demo"
+    inventory: "Patching Demo"
     ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
@@ -200,7 +200,7 @@ controller_templates:
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/snow_close_incident.yml"
-    inventory: "Colombo Demo"
+    inventory: "Patching Demo"
     ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
@@ -211,7 +211,7 @@ controller_templates:
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/approve_pending_workflow.yml"
-    inventory: "Colombo Demo"
+    inventory: "Patching Demo"
     credentials:
       - "AAP Controller"
 
@@ -221,9 +221,9 @@ controller_templates:
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/reset.yml"
-    inventory: "Colombo Demo"
+    inventory: "Patching Demo"
     credentials:
-      - "Colombo Demo SSH"
+      - "Demo SSH Key"
 
 # -----------------------------------------------------------------------------
 # Workflow: CVE Kpatch Response
