@@ -34,6 +34,7 @@
           strategy_used: kpatch
           cves_patched: "{{ kpatch_cves.stdout_lines | default([]) }}"
           patch_timestamp: "{{ ansible_date_time.iso8601 }}"
+        aggregate: false
 
     - name: Display patch summary
       ansible.builtin.debug:

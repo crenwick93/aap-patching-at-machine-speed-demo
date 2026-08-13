@@ -149,3 +149,4 @@
           sbom_diff_summary: "{{ sbom_diff | default({}) }}"
           validation_timestamp: "{{ ansible_date_time.iso8601 }}"
           strategy_used: "{{ strategy_used | default('kpatch') }}"
+        aggregate: false

@@ -97,6 +97,7 @@
           cve_list: "{{ cve_list }}"
           sbom_before_path: "{{ sbom_before_path | default('/tmp/sbom-before.json') }}"
           assessment_timestamp: "{{ ansible_date_time.iso8601 }}"
+        aggregate: false
 
     - name: Display assessment summary
       ansible.builtin.debug:
