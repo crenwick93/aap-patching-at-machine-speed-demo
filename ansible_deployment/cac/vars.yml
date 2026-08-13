@@ -413,7 +413,7 @@ eda_credentials:
 eda_event_streams:
   - name: "Lightspeed CVE Events token"
     organization: "Default"
-    eda_credential: "Lightspeed CVE Events token"
+    credential_name: "Lightspeed CVE Events token"
     event_stream_type: token
 
 # -----------------------------------------------------------------------------
