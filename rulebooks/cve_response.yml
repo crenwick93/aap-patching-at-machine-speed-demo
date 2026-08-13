@@ -25,9 +25,9 @@
     - servicenow.itsm.records:
         table: change_request
         instance:
-          host: "{{ SERVICENOW_INSTANCE_URL }}"
-          username: "{{ SERVICENOW_USERNAME }}"
-          password: "{{ SERVICENOW_PASSWORD }}"
+          host: "{{ SN_HOST }}"
+          username: "{{ SN_USERNAME }}"
+          password: "{{ SN_PASSWORD }}"
         interval: 30
         columns:
           - sys_id
