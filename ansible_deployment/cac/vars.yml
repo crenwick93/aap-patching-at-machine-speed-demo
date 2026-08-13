@@ -128,6 +128,7 @@ controller_templates:
     project: "Patching at Machine Speed"
     playbook: "playbooks/validate.yml"
     inventory: "Colombo Demo"
+    ask_variables_on_launch: true
     credentials:
       - "Colombo Demo SSH"
 
@@ -138,6 +139,7 @@ controller_templates:
     project: "Patching at Machine Speed"
     playbook: "playbooks/snow_log_kpatch.yml"
     inventory: "Demo Inventory"
+    ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
 
@@ -148,6 +150,7 @@ controller_templates:
     project: "Patching at Machine Speed"
     playbook: "playbooks/snow_open_cr.yml"
     inventory: "Demo Inventory"
+    ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
 
@@ -158,6 +161,7 @@ controller_templates:
     project: "Patching at Machine Speed"
     playbook: "playbooks/snow_update_cr.yml"
     inventory: "Demo Inventory"
+    ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
 
@@ -168,6 +172,7 @@ controller_templates:
     project: "Patching at Machine Speed"
     playbook: "playbooks/snow_close_cr.yml"
     inventory: "Demo Inventory"
+    ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
 
