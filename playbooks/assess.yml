@@ -82,9 +82,13 @@
       when: syft_check.rc == 0
 
     - name: Generate pre-patch RPM snapshot as SBOM
-      ansible.builtin.shell: >
-        rpm -qa --qf '{"name":"%{NAME}","version":"%{VERSION}-%{RELEASE}","arch":"%{ARCH}"}\n'
-        > {{ sbom_before_path | default('/tmp/sbom-before.json') }}
+      ansible.builtin.shell: |
+        python3 -c "
+        import subprocess, json
+        out = subprocess.check_output(['rpm', '-qa', '--qf', '%{NAME}\t%{VERSION}-%{RELEASE}.%{ARCH}\n']).decode()
+        comps = [{'name': l.split('\t')[0], 'version': l.split('\t')[1]} for l in out.strip().split('\n') if '\t' in l]
+        json.dump({'components': sorted(comps, key=lambda c: c['name'])}, open('{{ sbom_before_path | default('/tmp/sbom-before.json') }}', 'w'), indent=2)
+        "
       changed_when: true
       when: syft_check.rc != 0
 
