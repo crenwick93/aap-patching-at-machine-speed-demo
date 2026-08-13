@@ -24,30 +24,15 @@
         return_content: true
       register: pending
 
-    - name: Get parent workflow job for each pending approval
-      ansible.builtin.uri:
-        url: "{{ controller_url }}/api/controller/v2/workflow_jobs/{{ item.summary_fields.workflow_job.id }}/"
-        headers:
-          Authorization: "Bearer {{ controller_token }}"
-        validate_certs: "{{ controller_verify }}"
-        return_content: true
+    - name: Identify the approval from the CVE Kpatch Response workflow
+      ansible.builtin.set_fact:
+        matching_approval_id: "{{ item.id }}"
       loop: "{{ pending.json.results }}"
       loop_control:
-        label: "approval {{ item.id }} (workflow job {{ item.summary_fields.workflow_job.id }})"
-      register: workflow_jobs
-      when: pending.json.count > 0
-
-    - name: Identify the approval matching this CR
-      ansible.builtin.set_fact:
-        matching_approval_id: "{{ item.item.id }}"
-      loop: "{{ workflow_jobs.results | default([]) }}"
-      loop_control:
-        label: "workflow job {{ item.item.summary_fields.workflow_job.id | default('?') }}"
+        label: "approval {{ item.id }} ({{ item.summary_fields.workflow_job.name | default('?') }})"
       when:
-        - item.json is defined
-        - item.json.artifacts is defined
-        - cr_number in (item.json.artifacts | string)
-      no_log: false
+        - item.summary_fields.workflow_job is defined
+        - item.summary_fields.workflow_job.name == "CVE Kpatch Response"
 
     - name: Approve the matching workflow node
       ansible.builtin.uri:

@@ -75,6 +75,7 @@
         assignment_group: "CAB Approval"
         other:
           approval: requested
+          assigned_to: "{{ servicenow_approver | default('aap-hum-crenwick') }}"
 
     - name: Update Dev Incident with CR reference
       servicenow.itsm.incident:

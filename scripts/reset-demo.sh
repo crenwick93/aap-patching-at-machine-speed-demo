@@ -229,38 +229,54 @@ else
   echo "  [OK] Cloud-init finished"
   echo ""
 
-  # Register all hosts in parallel (cloud-init wait above ensures auto-reg is settled)
-  echo "  Registering hosts..."
+  EXPECTED_ORG="${RH_ORG:-}"
+  echo "  Registering hosts (expected org: ${EXPECTED_ORG:-any})..."
   register_one() {
     local hname="$1" hip="$2"
     local hfqdn="${hname}.${DOMAIN}"
-    local out
-    out=$(ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${hip}" "bash -s" 2>&1 <<REGSCRPT
-# 1. Kill rhcd permanently — it re-registers with the AMI's baked-in org
+    local attempt max_attempts=3
+
+    for attempt in $(seq 1 $max_attempts); do
+      local out
+      out=$(ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${hip}" "bash -s" 2>&1 <<REGSCRPT
+# Kill rhcd permanently
 sudo systemctl stop rhcd.service 2>/dev/null || true
 sudo systemctl disable rhcd.service 2>/dev/null || true
 sudo systemctl mask rhcd.service 2>/dev/null || true
-# 2. Tear down any existing registration completely
+# Nuke ALL registration and cached state
 sudo insights-client --unregister 2>/dev/null || true
 sudo subscription-manager unregister 2>/dev/null || true
 sudo rm -f /etc/insights-client/machine-id /etc/insights-client/.registered
-sudo rm -f /etc/pki/consumer/cert.pem /etc/pki/consumer/key.pem
-# 3. Register under the correct account
-sudo subscription-manager register --username='${RH_USER}' --password='${RH_PASS}' --force 2>&1
+sudo rm -rf /etc/pki/consumer/* /etc/pki/entitlement/*
+sudo rm -rf /var/lib/rhsm/cache/* /var/lib/rhsm/facts/*
+# Register fresh
+sudo subscription-manager register --username='${RH_USER}' --password='${RH_PASS}' --org='${EXPECTED_ORG}' --force 2>&1
+# Verify org before proceeding
+org=\$(sudo subscription-manager identity 2>&1 | grep 'org name' | awk '{print \$NF}')
+echo "RHSM_ORG=\${org}"
+# Register and upload to Insights
 sudo insights-client --register 2>&1
-# 4. Force upload and print the account for verification
 sudo insights-client 2>&1 | tail -1
 REGSCRPT
 )
-    local acct_line
-    acct_line=$(echo "$out" | grep "account " | tail -1)
-    if echo "$out" | grep -q "Successfully uploaded"; then
-      echo "  [OK] ${hfqdn} -- ${acct_line}"
-    else
-      echo "  [FAIL] ${hfqdn}: retrying upload..."
-      ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${hip}" \
-        "sudo insights-client 2>&1 | tail -1" 2>/dev/null || true
-    fi
+      local registered_org
+      registered_org=$(echo "$out" | grep "^RHSM_ORG=" | cut -d= -f2)
+      local acct_line
+      acct_line=$(echo "$out" | grep "account " | tail -1)
+
+      if [[ -n "$EXPECTED_ORG" && "$registered_org" != "$EXPECTED_ORG" ]]; then
+        echo "  [RETRY ${attempt}/${max_attempts}] ${hfqdn} -- wrong org ${registered_org}, expected ${EXPECTED_ORG}"
+        continue
+      fi
+
+      if echo "$out" | grep -q "Successfully uploaded"; then
+        echo "  [OK] ${hfqdn} -- ${acct_line} (org: ${registered_org})"
+        return 0
+      fi
+    done
+
+    echo "  [FAIL] ${hfqdn} -- could not register to correct org after ${max_attempts} attempts"
+    return 1
   }
 
   while IFS=: read -r rname rip; do
