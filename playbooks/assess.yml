@@ -67,30 +67,26 @@
           {% endif %}
       when: triggered_cve is defined and triggered_cve | length > 0
 
-    - name: Install syft for SBOM generation (if not present)
-      ansible.builtin.shell: |
-        if ! command -v syft &>/dev/null; then
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
-        fi
-      args:
-        creates: /usr/local/bin/syft
-      ignore_errors: true
-      register: syft_install
+    - name: Check if syft is available
+      ansible.builtin.command: syft version
+      register: syft_check
+      changed_when: false
+      failed_when: false
 
-    - name: Generate pre-patch CycloneDX SBOM
+    - name: Generate pre-patch CycloneDX SBOM (syft)
       ansible.builtin.command: >
         syft packages dir:/ --catalogers rpm-db-cataloger
         -o cyclonedx-json
         --file {{ sbom_before_path | default('/tmp/sbom-before.json') }}
       changed_when: true
-      when: syft_install is succeeded
+      when: syft_check.rc == 0
 
-    - name: Fallback — generate RPM package list as SBOM
+    - name: Generate pre-patch RPM snapshot as SBOM
       ansible.builtin.shell: >
         rpm -qa --qf '{"name":"%{NAME}","version":"%{VERSION}-%{RELEASE}","arch":"%{ARCH}"}\n'
         > {{ sbom_before_path | default('/tmp/sbom-before.json') }}
-      when: syft_install is failed
       changed_when: true
+      when: syft_check.rc != 0
 
     - name: Publish assessment data
       ansible.builtin.set_stats:

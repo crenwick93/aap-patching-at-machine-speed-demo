@@ -37,12 +37,26 @@
       loop_control:
         label: "{{ item.item }}"
 
-    - name: Generate post-patch CycloneDX SBOM
+    - name: Check if syft is available
+      ansible.builtin.command: syft version
+      register: syft_check
+      changed_when: false
+      failed_when: false
+
+    - name: Generate post-patch CycloneDX SBOM (syft)
       ansible.builtin.command: >
         syft packages dir:/ --catalogers rpm-db-cataloger
         -o cyclonedx-json
         --file {{ sbom_after }}
       changed_when: true
+      when: syft_check.rc == 0
+
+    - name: Generate post-patch RPM snapshot as SBOM
+      ansible.builtin.shell: >
+        rpm -qa --qf '{"name":"%{NAME}","version":"%{VERSION}-%{RELEASE}","arch":"%{ARCH}"}\n'
+        > {{ sbom_after }}
+      changed_when: true
+      when: syft_check.rc != 0
 
     - name: Check if pre-patch SBOM exists
       ansible.builtin.stat:
