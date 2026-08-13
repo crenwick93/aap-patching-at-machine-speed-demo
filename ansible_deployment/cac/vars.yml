@@ -416,6 +416,7 @@ eda_event_streams:
     organization: "Default"
     credential_name: "Lightspeed CVE Events token"
     event_stream_type: token
+    test_mode: false
 
 # -----------------------------------------------------------------------------
 # Rulebook Activations

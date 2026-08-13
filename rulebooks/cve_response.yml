@@ -8,13 +8,11 @@
         port: 5000
   rules:
     - name: Critical CVE detected on Trading Platform host
-      condition: >-
-        event.payload.application == "vulnerability"
-        and event.payload.event_type in ["new-cve-severity", "new-cve-cvss", "any-cve-known-exploit"]
+      condition: event.payload.application is defined and event.payload.application == "vulnerability"
       throttle:
         once_within: 5 minutes
         group_by_attributes:
-          - event.payload.events[0].payload.reported_cve
+          - event.payload.advisory_id
       action:
         run_workflow_template:
           name: "CVE Kpatch Response"
