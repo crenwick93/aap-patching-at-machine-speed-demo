@@ -40,6 +40,7 @@ AAP_TOKEN_VAL="${AAP_TOKEN:?Set AAP_TOKEN in .env}"
 
 RH_USER="${RH_USERNAME:-}"
 RH_PASS="${RH_PASSWORD:-}"
+RH_ORG="${RH_ORG_ID:-}"
 
 if [[ -z "$RH_USER" || -z "$RH_PASS" ]]; then
   echo "WARNING: RH_USERNAME / RH_PASSWORD not set in .env"
@@ -56,28 +57,57 @@ NODES=(
   "rhel-prod-03:prod"
 )
 
+SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes"
+
 echo ""
-echo "╔════════════════════════════════════════════════════════════╗"
-echo "║            Demo Reset — Reprovisioning EC2               ║"
-echo "╚════════════════════════════════════════════════════════════╝"
+echo "+============================================================+"
+echo "|            Demo Reset - Reprovisioning EC2               |"
+echo "+============================================================+"
 echo ""
 
-# ─── Step 1: Clean ServiceNow records ───────────────────────────────────────
+# --- Step 1: Clean ServiceNow records ---
 if [[ "$SKIP_SNOW" == false ]]; then
-  echo "── Step 1/6: Cleaning ServiceNow records ──"
+  echo "-- Step 1/7: Cleaning ServiceNow records --"
   if [[ -x "${SCRIPT_DIR}/cleanup-servicenow.sh" ]]; then
-    "${SCRIPT_DIR}/cleanup-servicenow.sh" --records 2>/dev/null || echo "  (cleanup had warnings — continuing)"
+    "${SCRIPT_DIR}/cleanup-servicenow.sh" --records 2>/dev/null || echo "  (cleanup had warnings - continuing)"
   else
     echo "  Skipped (cleanup-servicenow.sh not found)"
   fi
   echo ""
 else
-  echo "── Step 1/6: Skipping ServiceNow cleanup (--skip-snow) ──"
+  echo "-- Step 1/7: Skipping ServiceNow cleanup (--skip-snow) --"
   echo ""
 fi
 
-# ─── Step 2: Terminate existing instances ────────────────────────────────────
-echo "── Step 2/6: Terminating existing instances ──"
+# --- Step 2: Deregister running instances from Insights ---
+echo "-- Step 2/7: Deregistering from Insights --"
+EXISTING_INFO=$(aws ec2 describe-instances \
+  --region "$REGION" \
+  --filters "Name=tag:demo,Values=patching" "Name=instance-state-name,Values=running" \
+  --query "Reservations[].Instances[].{IP:PublicIpAddress,Name:Tags[?Key=='Name']|[0].Value}" \
+  --output json 2>/dev/null || echo "[]")
+
+LIVE_COUNT=$(echo "$EXISTING_INFO" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null)
+
+if [[ "$LIVE_COUNT" -gt 0 ]]; then
+  echo "$EXISTING_INFO" | python3 -c "
+import json, sys
+for i in json.load(sys.stdin):
+    if i.get('IP'):
+        print(f\"{i['Name']}:{i['IP']}\")
+" | while IFS=: read -r dname dip; do
+    ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${dip}" \
+      "sudo insights-client --unregister 2>/dev/null || true; sudo rhc disconnect 2>/dev/null || true; sudo subscription-manager unregister 2>/dev/null || true" \
+      > /dev/null 2>&1 && echo "  [OK] ${dname}" || echo "  [SKIP] ${dname} (already cleaned or unreachable)" &
+  done
+  wait
+else
+  echo "  No running instances to deregister"
+fi
+echo ""
+
+# --- Step 3: Terminate existing instances ---
+echo "-- Step 3/7: Terminating instances --"
 EXISTING_IDS=$(aws ec2 describe-instances \
   --region "$REGION" \
   --filters "Name=tag:demo,Values=patching" "Name=instance-state-name,Values=running,stopped,stopping" \
@@ -90,24 +120,33 @@ if [[ -n "$EXISTING_IDS" && "$EXISTING_IDS" != "None" ]]; then
   aws ec2 terminate-instances --region "$REGION" --instance-ids $EXISTING_IDS > /dev/null
   echo "  Waiting for termination..."
   aws ec2 wait instance-terminated --region "$REGION" --instance-ids $EXISTING_IDS
-  echo "  ✓ All terminated"
+  echo "  [OK] All terminated"
 else
   echo "  No existing demo instances found"
 fi
 echo ""
 
-# ─── Step 3: Launch fresh instances ──────────────────────────────────────────
-echo "── Step 3/6: Launching ${#NODES[@]} fresh instances ──"
+# --- Step 4: Launch fresh instances ---
+echo "-- Step 4/7: Launching ${#NODES[@]} fresh instances --"
 NEW_IDS=()
+UD_TMPFILE=$(mktemp)
+trap "rm -f '${UD_TMPFILE}'" EXIT
 
 for entry in "${NODES[@]}"; do
   name="${entry%%:*}"
   env="${entry##*:}"
   fqdn="${name}.${DOMAIN}"
 
-  USER_DATA="#!/bin/bash
-hostnamectl set-hostname ${fqdn}
-echo '${fqdn}' > /etc/hostname"
+  cat > "$UD_TMPFILE" <<USERDATA
+#cloud-config
+bootcmd:
+  - [ systemctl, mask, rhcd.service ]
+  - [ systemctl, stop, rhcd.service ]
+  - [ systemctl, mask, insights-client.timer ]
+runcmd:
+  - hostnamectl set-hostname ${fqdn}
+  - echo '${fqdn}' > /etc/hostname
+USERDATA
 
   instance_id=$(aws ec2 run-instances \
     --region "$REGION" \
@@ -116,24 +155,23 @@ echo '${fqdn}' > /etc/hostname"
     --subnet-id "$SUBNET" \
     --security-group-ids "$SG" \
     --key-name "$KEY_NAME" \
-    --user-data "$USER_DATA" \
+    --user-data "file://${UD_TMPFILE}" \
     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=${name}},{Key=env,Value=${env}},{Key=demo,Value=patching}]" \
     --query "Instances[0].InstanceId" \
-    --output text 2>/dev/null)
+    --output text)
 
   NEW_IDS+=("$instance_id")
   echo "  ${fqdn} (${env}): ${instance_id}"
 done
 echo ""
 
-# ─── Step 4: Wait for running + get IPs ─────────────────────────────────────
-echo "── Step 4/6: Waiting for instances to be running ──"
+# --- Step 5: Wait for running + get IPs ---
+echo "-- Step 5/7: Waiting for instances to be running --"
 aws ec2 wait instance-running --region "$REGION" --instance-ids "${NEW_IDS[@]}"
-echo "  ✓ All running"
+echo "  [OK] All running"
 echo ""
 
-# Build IP map
-declare -A IP_MAP
+IP_MAP_FILE=$(mktemp)
 INSTANCE_INFO=$(aws ec2 describe-instances \
   --region "$REGION" \
   --instance-ids "${NEW_IDS[@]}" \
@@ -147,69 +185,122 @@ for i in json.load(sys.stdin):
     print(f\"    {i['Name']:20s}  {i['Env']:5s}  {i['IP']:16s}  {i['ID']}\")
 "
 
-# Parse IPs into shell associative array
-eval "$(echo "$INSTANCE_INFO" | python3 -c "
+echo "$INSTANCE_INFO" | python3 -c "
 import json, sys
 for i in json.load(sys.stdin):
-    print(f'IP_MAP[{i[\"Name\"]}]={i[\"IP\"]}')
-")"
+    print(f\"{i['Name']}:{i['IP']}\")
+" > "$IP_MAP_FILE"
 echo ""
 
-# ─── Step 5: Register with Insights ─────────────────────────────────────────
-echo "── Step 5/6: Registering instances with Red Hat Insights ──"
+# --- Step 6: Register with Insights ---
+echo "-- Step 6/7: Registering instances with Red Hat Insights --"
 
 if [[ -z "$RH_USER" || -z "$RH_PASS" ]]; then
   echo "  Skipped (RH_USERNAME / RH_PASSWORD not set)"
   echo ""
 else
-  wait_for_ssh() {
-    local ip="$1" max_wait=120 elapsed=0
-    while ! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 -o BatchMode=yes \
-              -i "$SSH_KEY" "${SSH_USER}@${ip}" true 2>/dev/null; do
-      elapsed=$((elapsed + 5))
-      if [[ $elapsed -ge $max_wait ]]; then
-        echo "    SSH timeout after ${max_wait}s"
-        return 1
-      fi
-      sleep 5
-    done
-    return 0
-  }
-
-  register_host() {
-    local name="$1" ip="$2"
-    local fqdn="${name}.${DOMAIN}"
-
-    if ! wait_for_ssh "$ip"; then
-      echo "  ✗ ${fqdn}: SSH not available"
-      return 1
+  # Wait for SSH on all hosts first
+  echo "  Waiting for SSH on all hosts..."
+  while IFS=: read -r wname wip; do
+    if [[ -n "$wip" ]]; then
+      elapsed=0
+      while ! ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${wip}" true 2>/dev/null; do
+        elapsed=$((elapsed + 5))
+        if [[ $elapsed -ge 120 ]]; then
+          echo "  [FAIL] ${wname}: SSH timeout"
+          break
+        fi
+        sleep 5
+      done
     fi
+  done < "$IP_MAP_FILE"
+  echo "  [OK] SSH available"
+  echo ""
 
-    ssh -o StrictHostKeyChecking=no -o BatchMode=yes -i "$SSH_KEY" "${SSH_USER}@${ip}" \
-      "sudo subscription-manager register --username='${RH_USER}' --password='${RH_PASS}' --force 2>&1 && \
-       sudo rhc connect 2>&1" > /dev/null 2>&1
+  # Wait for cloud-init to finish on all hosts (ensures hostname + any auto-reg is done)
+  echo "  Waiting for cloud-init to complete on all hosts..."
+  while IFS=: read -r wname wip; do
+    if [[ -n "$wip" ]]; then
+      ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${wip}" \
+        "sudo cloud-init status --wait 2>/dev/null || sleep 30" > /dev/null 2>&1 &
+    fi
+  done < "$IP_MAP_FILE"
+  wait
+  echo "  [OK] Cloud-init finished"
+  echo ""
 
-    if [[ $? -eq 0 ]]; then
-      echo "  ✓ ${fqdn}"
+  # Register all hosts in parallel (cloud-init wait above ensures auto-reg is settled)
+  echo "  Registering hosts..."
+  register_one() {
+    local hname="$1" hip="$2"
+    local hfqdn="${hname}.${DOMAIN}"
+    local out
+    out=$(ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${hip}" "bash -s" 2>&1 <<REGSCRPT
+# 1. Kill rhcd permanently — it re-registers with the AMI's baked-in org
+sudo systemctl stop rhcd.service 2>/dev/null || true
+sudo systemctl disable rhcd.service 2>/dev/null || true
+sudo systemctl mask rhcd.service 2>/dev/null || true
+# 2. Tear down any existing registration completely
+sudo insights-client --unregister 2>/dev/null || true
+sudo subscription-manager unregister 2>/dev/null || true
+sudo rm -f /etc/insights-client/machine-id /etc/insights-client/.registered
+sudo rm -f /etc/pki/consumer/cert.pem /etc/pki/consumer/key.pem
+# 3. Register under the correct account
+sudo subscription-manager register --username='${RH_USER}' --password='${RH_PASS}' --force 2>&1
+sudo insights-client --register 2>&1
+# 4. Force upload and print the account for verification
+sudo insights-client 2>&1 | tail -1
+REGSCRPT
+)
+    local acct_line
+    acct_line=$(echo "$out" | grep "account " | tail -1)
+    if echo "$out" | grep -q "Successfully uploaded"; then
+      echo "  [OK] ${hfqdn} -- ${acct_line}"
     else
-      echo "  ✗ ${fqdn}: registration failed (check credentials)"
+      echo "  [FAIL] ${hfqdn}: retrying upload..."
+      ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${hip}" \
+        "sudo insights-client 2>&1 | tail -1" 2>/dev/null || true
     fi
   }
 
-  echo "  Waiting for SSH availability..."
-  for entry in "${NODES[@]}"; do
-    name="${entry%%:*}"
-    ip="${IP_MAP[$name]:-}"
-    if [[ -n "$ip" ]]; then
-      register_host "$name" "$ip" &
+  while IFS=: read -r rname rip; do
+    if [[ -n "$rip" ]]; then
+      register_one "$rname" "$rip" &
+    fi
+  done < "$IP_MAP_FILE"
+  wait
+
+  rm -f "$IP_MAP_FILE"
+  echo ""
+
+  # Verify: check all hosts report correct account
+  if [[ -n "$RH_ORG" ]]; then
+    echo "  Verifying registration (expecting account ${RH_ORG})..."
+  else
+    echo "  Verifying registration..."
+  fi
+  aws ec2 describe-instances \
+    --region "$REGION" \
+    --filters "Name=tag:demo,Values=patching" "Name=instance-state-name,Values=running" \
+    --query "Reservations[].Instances[].{Name:Tags[?Key=='Name']|[0].Value,IP:PublicIpAddress}" \
+    --output json 2>/dev/null | python3 -c "
+import json, sys
+for i in json.load(sys.stdin):
+    print(f\"{i['Name']}:{i['IP']}\")
+" | while IFS=: read -r vname vip; do
+    vresult=$(ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${vip}" \
+      "sudo insights-client --status 2>&1" 2>/dev/null || echo "error")
+    if echo "$vresult" | grep -q "confirms registration"; then
+      echo "  [OK] ${vname}: registered"
+    else
+      echo "  [FAIL] ${vname}: NOT registered"
     fi
   done
-  wait
   echo ""
 fi
 
-# ─── Step 6: Sync AAP inventory ─────────────────────────────────────────────
-echo "── Step 6/6: Syncing AAP dynamic inventory ──"
+# --- Step 7: Sync AAP inventory ---
+echo "-- Step 7/7: Syncing AAP dynamic inventory --"
 
 INV_SOURCE_ID=$(curl -sk -H "Authorization: Bearer ${AAP_TOKEN_VAL}" \
   "${AAP_HOST}/api/controller/v2/inventory_sources/?name=AWS+EC2+Discovery" \
@@ -223,20 +314,20 @@ if [[ -n "$INV_SOURCE_ID" ]]; then
   curl -sk -X POST -H "Authorization: Bearer ${AAP_TOKEN_VAL}" \
     "${AAP_HOST}/api/controller/v2/inventory_sources/${INV_SOURCE_ID}/update/" \
     -H "Content-Type: application/json" > /dev/null 2>&1
-  echo "  ✓ Inventory sync triggered (source ID: ${INV_SOURCE_ID})"
+  echo "  [OK] Inventory sync triggered (source ID: ${INV_SOURCE_ID})"
 else
-  echo "  ✗ Could not find 'AWS EC2 Discovery' inventory source"
+  echo "  [FAIL] Could not find 'AWS EC2 Discovery' inventory source"
 fi
 
 echo ""
-echo "╔════════════════════════════════════════════════════════════╗"
-echo "║                    Reset Complete                         ║"
-echo "╠════════════════════════════════════════════════════════════╣"
-echo "║  • 6 fresh RHEL instances provisioned                    ║"
-echo "║  • Hostnames set via cloud-init                          ║"
-echo "║  • AAP inventory sync triggered                          ║"
-echo "║                                                          ║"
-echo "║  Next steps:                                             ║"
-echo "║  1. Wait ~60s for inventory sync to complete             ║"
-echo "║  2. Run: ./scripts/simulate-cve-event.sh                 ║"
-echo "╚════════════════════════════════════════════════════════════╝"
+echo "+============================================================+"
+echo "|                    Reset Complete                         |"
+echo "+============================================================+"
+echo "|  * 6 fresh RHEL instances provisioned                    |"
+echo "|  * Hostnames set via cloud-init                          |"
+echo "|  * AAP inventory sync triggered                          |"
+echo "|                                                          |"
+echo "|  Next steps:                                             |"
+echo "|  1. Wait ~60s for inventory sync to complete             |"
+echo "|  2. Run: ./scripts/simulate-cve-event.sh                 |"
+echo "+============================================================+"

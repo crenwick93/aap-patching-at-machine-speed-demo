@@ -63,20 +63,36 @@
         category: Software
         assignment_group: "CAB Approval"
         other:
-          parent: "{{ inc_sys_id | default(omit) }}"
+          parent: "{{ inc_prod_sys_id | default(inc_sys_id) | default(omit) }}"
           cmdb_ci: "{{ app_prod_lookup.records[0].sys_id | default(omit) }}"
           business_service: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
       register: cr_result
 
-    - name: Update Incident with CR reference
+    - name: Progress CR to Authorize and request approval
+      servicenow.itsm.change_request:
+        number: "{{ cr_result.record.number }}"
+        state: authorize
+        assignment_group: "CAB Approval"
+        other:
+          approval: requested
+
+    - name: Update Dev Incident with CR reference
       servicenow.itsm.incident:
         sys_id: "{{ inc_sys_id }}"
         other:
           work_notes: >-
+            Dev canary deployment completed successfully.
             Emergency CR {{ cr_result.record.number }} raised for production kpatch.
-            Canary deployment to dev completed successfully.
-            Awaiting CAB approval before production remediation proceeds.
       when: inc_sys_id is defined
+
+    - name: Update Prod Incident with CR reference
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_prod_sys_id }}"
+        other:
+          work_notes: >-
+            Emergency CR {{ cr_result.record.number }} raised for production kpatch.
+            Dev canary passed — awaiting CAB approval before production remediation.
+      when: inc_prod_sys_id is defined
 
     - name: Display CR details
       ansible.builtin.debug:

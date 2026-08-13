@@ -20,17 +20,23 @@
           - name: = Trading Platform (Dev)
       register: app_dev_lookup
 
-    - name: Create security Incident
+    - name: Look up Trading Platform (Prod) application service
+      servicenow.itsm.configuration_item_info:
+        query:
+          - name: = Trading Platform (Prod)
+      register: app_prod_lookup
+
+    - name: Create Dev environment Incident
       servicenow.itsm.incident:
         state: new
         impact: high
         urgency: high
         short_description: >-
           Critical kernel CVE detected — {{ advisory_id | default('RHSA-2026:25217') }}
-          affecting Trading Platform (6 RHEL hosts)
+          affecting Trading Platform (Dev)
         description: |
-          Red Hat Lightspeed detected a critical kernel security advisory
-          affecting the Trading Platform infrastructure.
+          Red Hat Insights detected a critical kernel security advisory
+          affecting the Trading Platform Dev environment.
 
           Advisory: {{ advisory_id | default('RHSA-2026:25217') }}
           Severity: {{ severity | default('Critical') }}
@@ -38,54 +44,94 @@
           CVEs: {{ cve_list | default([]) | join(', ') }}
           Trigger host: {{ affected_host | default('N/A') }}
 
-          Affected services:
-            Trading Platform (Dev)  — rhel-dev-01.{{ domain }}, rhel-dev-02.{{ domain }}, rhel-dev-03.{{ domain }}
-            Trading Platform (Prod) — rhel-prod-01.{{ domain }}, rhel-prod-02.{{ domain }}, rhel-prod-03.{{ domain }}
+          Affected hosts:
+            - rhel-dev-01.{{ domain }}
+            - rhel-dev-02.{{ domain }}
+            - rhel-dev-03.{{ domain }}
 
           Automated triage initiated by Event-Driven Ansible.
-          AAP workflow will:
-            1. Pre-check and assess all hosts in the Trading Platform fleet
-            2. Run canary kpatch on dev environment
-            3. Validate services post-patch
-            4. Raise emergency CR for production
-            5. Await approval, then kpatch production
-            6. Update CMDB CIs with new kernel version
+          Dev environment will be patched first as a canary deployment.
         caller: "{{ servicenow_caller | default('aap-svc-crenwick') }}"
         other:
           category: Software
           subcategory: Operating System
           cmdb_ci: "{{ app_dev_lookup.records[0].sys_id | default(omit) }}"
           business_service: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
-      register: inc_result
+      register: inc_dev_result
 
-    - name: Add affected CIs as work note
+    - name: Create Prod environment Incident
       servicenow.itsm.incident:
-        sys_id: "{{ inc_result.record.sys_id }}"
-        other:
-          work_notes: |
-            Affected Configuration Items:
-            Dev environment:
-            - rhel-dev-01.{{ domain }}
-            - rhel-dev-02.{{ domain }}
-            - rhel-dev-03.{{ domain }}
-            Prod environment:
+        state: new
+        impact: high
+        urgency: high
+        short_description: >-
+          Critical kernel CVE detected — {{ advisory_id | default('RHSA-2026:25217') }}
+          affecting Trading Platform (Prod)
+        description: |
+          Red Hat Insights detected a critical kernel security advisory
+          affecting the Trading Platform Prod environment.
+
+          Advisory: {{ advisory_id | default('RHSA-2026:25217') }}
+          Severity: {{ severity | default('Critical') }}
+          Synopsis: {{ synopsis | default('Important: kernel security update') }}
+          CVEs: {{ cve_list | default([]) | join(', ') }}
+          Trigger host: {{ affected_host | default('N/A') }}
+
+          Affected hosts:
             - rhel-prod-01.{{ domain }}
             - rhel-prod-02.{{ domain }}
             - rhel-prod-03.{{ domain }}
 
-            Automated assessment in progress via AAP.
+          Automated triage initiated by Event-Driven Ansible.
+          Production will only be patched after dev canary succeeds
+          and an emergency Change Request is approved.
+        caller: "{{ servicenow_caller | default('aap-svc-crenwick') }}"
+        other:
+          category: Software
+          subcategory: Operating System
+          cmdb_ci: "{{ app_prod_lookup.records[0].sys_id | default(omit) }}"
+          business_service: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
+      register: inc_prod_result
+
+    - name: Add work notes to Dev Incident
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_dev_result.record.sys_id }}"
+        other:
+          work_notes: |
+            Affected Configuration Items (Dev):
+            - rhel-dev-01.{{ domain }}
+            - rhel-dev-02.{{ domain }}
+            - rhel-dev-03.{{ domain }}
+
+            Automated canary deployment in progress via AAP.
+
+    - name: Add work notes to Prod Incident
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_prod_result.record.sys_id }}"
+        other:
+          work_notes: |
+            Affected Configuration Items (Prod):
+            - rhel-prod-01.{{ domain }}
+            - rhel-prod-02.{{ domain }}
+            - rhel-prod-03.{{ domain }}
+
+            Awaiting dev canary result before proceeding.
+            Emergency CR will be raised for production approval.
 
     - name: Display Incident details
       ansible.builtin.debug:
         msg: |
-          === Incident Created ===
-          Number: {{ inc_result.record.number }}
-          Sys ID: {{ inc_result.record.sys_id }}
-          Priority: {{ inc_result.record.priority }}
+          === Incidents Created ===
+          Dev:  {{ inc_dev_result.record.number }} ({{ inc_dev_result.record.sys_id }})
+          Prod: {{ inc_prod_result.record.number }} ({{ inc_prod_result.record.sys_id }})
+          Priority: {{ inc_dev_result.record.priority }}
           Awaiting triage by AAP workflow.
 
     - name: Publish Incident identifiers
       ansible.builtin.set_stats:
         data:
-          inc_sys_id: "{{ inc_result.record.sys_id }}"
-          inc_number: "{{ inc_result.record.number }}"
+          inc_sys_id: "{{ inc_dev_result.record.sys_id }}"
+          inc_number: "{{ inc_dev_result.record.number }}"
+          inc_prod_sys_id: "{{ inc_prod_result.record.sys_id }}"
+          inc_prod_number: "{{ inc_prod_result.record.number }}"
+        aggregate: false
