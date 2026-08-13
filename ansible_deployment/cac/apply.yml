@@ -32,6 +32,8 @@
     servicenow_username: "{{ lookup('env', 'SERVICENOW_USERNAME') | default(omit, true) }}"
     servicenow_password: "{{ lookup('env', 'SERVICENOW_PASSWORD') | default(omit, true) }}"
 
+    eda_event_stream_token: "{{ lookup('env', 'EDA_EVENT_STREAM_TOKEN') | default(omit, true) }}"
+
   vars_files:
     - vars.yml
   roles:

@@ -398,6 +398,24 @@ eda_credentials:
       SN_USERNAME: "{{ servicenow_username }}"
       SN_PASSWORD: "{{ servicenow_password }}"
 
+  - name: "Lightspeed CVE Events token"
+    description: "Token auth for simulated Lightspeed CVE webhook events"
+    credential_type: "Token Event Stream"
+    organization: "Default"
+    inputs:
+      auth_type: token
+      token: "{{ eda_event_stream_token }}"
+      http_header_key: Authorization
+
+# -----------------------------------------------------------------------------
+# Event Streams
+# -----------------------------------------------------------------------------
+eda_event_streams:
+  - name: "Lightspeed CVE Events token"
+    organization: "Default"
+    eda_credential: "Lightspeed CVE Events token"
+    event_stream_type: token
+
 # -----------------------------------------------------------------------------
 # Rulebook Activations
 # -----------------------------------------------------------------------------
@@ -409,6 +427,9 @@ eda_rulebook_activations:
     rulebook: "cve_response.yml"
     decision_environment: "ServiceNow DE"
     enabled: true
+    source_mappings:
+      - source_name: insights_events
+        event_stream_name: "Lightspeed CVE Events token"
     eda_credentials:
       - "AAP Controller Token"
       - "ServiceNow EDA"
