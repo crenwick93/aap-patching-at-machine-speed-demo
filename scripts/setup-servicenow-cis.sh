@@ -19,6 +19,7 @@ if [[ -f "${REPO_ROOT}/.env" ]]; then
 fi
 
 SN_HOST="${SERVICENOW_INSTANCE_URL:?Set SERVICENOW_INSTANCE_URL in .env}"
+SN_HOST="${SN_HOST%/}"
 SN_USER="${SERVICENOW_USERNAME:?Set SERVICENOW_USERNAME in .env}"
 SN_PASS="${SERVICENOW_PASSWORD:?Set SERVICENOW_PASSWORD in .env}"
 
@@ -29,7 +30,9 @@ RUNS_ON="60bc4e22c0a8010e01f074cbe6bd73c3"
 lookup_ci() {
   local table="$1" name="$2"
   curl -s -u "${SN_USER}:${SN_PASS}" \
-    "${SN_HOST}/api/now/table/${table}?sysparm_query=name=${name}&sysparm_fields=sys_id" \
+    -G "${SN_HOST}/api/now/table/${table}" \
+    --data-urlencode "sysparm_query=name=${name}" \
+    --data-urlencode "sysparm_fields=sys_id" \
     -H "Accept: application/json" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
