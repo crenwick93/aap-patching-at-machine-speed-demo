@@ -23,8 +23,8 @@
             extra_vars:
               affected_host: "{{ event.payload.context.display_name | default('unknown') }}"
               cve_list: "{{ event.payload.events | map(attribute='payload.reported_cve') | list | default([]) }}"
-              severity: "Critical"
-              advisory_id: "RHSA-2026:28741"
+              severity: "{{ event.payload.source.event_type.display_name | default('Critical') }}"
+              advisory_id: "{{ event.payload.advisory_id | default('Unknown') }}"
 
 - name: ServiceNow CR Approval Bridge
   hosts: all

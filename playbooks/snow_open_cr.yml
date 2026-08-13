@@ -16,12 +16,12 @@
         type: emergency
         state: new
         short_description: >-
-          Emergency kpatch — {{ advisory_id | default('RHSA-2026:28741') }}
+          Emergency kpatch — {{ advisory_id | default('RHSA-2026:25217') }}
           ({{ cves_patched | default([]) | length }} CVEs) — production fleet
         description: |
           Emergency Change Request for production kpatch deployment.
 
-          Advisory: {{ advisory_id | default('RHSA-2026:28741') }}
+          Advisory: {{ advisory_id | default('RHSA-2026:25217') }}
           Severity: {{ severity | default('Critical') }}
           Kernel: {{ kernel_version | default('unknown') }}
           CVEs: {{ cve_list | default([]) | join(', ') }}

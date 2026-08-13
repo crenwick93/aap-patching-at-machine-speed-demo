@@ -20,13 +20,13 @@
         impact: high
         urgency: high
         short_description: >-
-          Critical kernel CVE detected — {{ advisory_id | default('RHSA-2026:28741') }}
+          Critical kernel CVE detected — {{ advisory_id | default('RHSA-2026:25217') }}
           affecting Trading Platform (6 RHEL hosts)
         description: |
           Red Hat Lightspeed detected a critical kernel security advisory
           affecting the Trading Platform infrastructure.
 
-          Advisory: {{ advisory_id | default('RHSA-2026:28741') }}
+          Advisory: {{ advisory_id | default('RHSA-2026:25217') }}
           Severity: {{ severity | default('Critical') }}
           Synopsis: {{ synopsis | default('Important: kernel security update') }}
           CVEs: {{ cve_list | default([]) | join(', ') }}
