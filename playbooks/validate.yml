@@ -110,7 +110,7 @@
     - name: Look up CI by hostname (fallback)
       servicenow.itsm.configuration_item_info:
         query:
-          - name: = {{ inventory_hostname_short | default(inventory_hostname) }}
+          - name: = {{ ansible_fqdn | default(inventory_hostname) }}
       register: ci_by_name
       when: ci_sys_id is not defined
       delegate_to: localhost

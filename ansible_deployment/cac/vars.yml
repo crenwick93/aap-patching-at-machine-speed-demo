@@ -242,20 +242,18 @@ controller_workflows:
       - identifier: "Open Incident"
         unified_job_template: "Open Incident"
         success_nodes:
-          - "Canary: Pre-check"
+          - "Pre-check All Hosts"
 
       # --- Phase 2: Dev Canary (fully automated) ---
-      - identifier: "Canary: Pre-check"
+      - identifier: "Pre-check All Hosts"
         unified_job_template: "Pre-check System Readiness"
-        limit: "tag_env_dev"
         success_nodes:
-          - "Canary: Assess"
+          - "Assess All Hosts"
         failure_nodes:
           - "Close Incident (Canary Failed)"
 
-      - identifier: "Canary: Assess"
+      - identifier: "Assess All Hosts"
         unified_job_template: "Assess Kernel Exposure"
-        limit: "tag_env_dev"
         success_nodes:
           - "Canary: Apply Kpatch"
         failure_nodes:

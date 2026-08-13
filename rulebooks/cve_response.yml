@@ -7,17 +7,24 @@
         host: 0.0.0.0
         port: 5000
   rules:
-    - name: Critical CVE advisory detected
-      condition: event.payload.application == "vulnerability"
+    - name: Critical CVE detected on Trading Platform host
+      condition: >-
+        event.payload.application == "vulnerability"
+        and event.payload.event_type in ["new-cve-severity", "new-cve-cvss", "any-cve-known-exploit"]
+      throttle:
+        once_within: 5 minutes
+        group_by_attributes:
+          - event.payload.events[0].payload.reported_cve
       action:
         run_workflow_template:
           name: "CVE Kpatch Response"
           organization: Default
           job_args:
             extra_vars:
-              advisory_id: "{{ event.payload.advisory_id | default('RHSA-SIMULATED') }}"
-              severity: "{{ event.payload.severity | default('Critical') }}"
-              cve_list: "{{ event.payload.cve_list | default([]) }}"
+              affected_host: "{{ event.payload.context.display_name | default('unknown') }}"
+              cve_list: "{{ event.payload.events | map(attribute='payload.reported_cve') | list | default([]) }}"
+              severity: "Critical"
+              advisory_id: "RHSA-2026:28741"
 
 - name: ServiceNow CR Approval Bridge
   hosts: all

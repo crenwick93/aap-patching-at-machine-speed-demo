@@ -4,6 +4,9 @@
   connection: local
   gather_facts: false
 
+  vars:
+    domain: trading-demo.chrislab.dev
+
   tasks:
     - name: Look up Trading Platform business service
       servicenow.itsm.configuration_item_info:
@@ -11,46 +14,36 @@
           - name: = Trading Platform
       register: biz_svc_lookup
 
-    - name: Look up Trading Platform (Dev) application
-      servicenow.itsm.configuration_item_info:
-        query:
-          - name: = Trading Platform (Dev)
-      register: app_dev_lookup
-
-    - name: Look up Trading Platform (Prod) application
-      servicenow.itsm.configuration_item_info:
-        query:
-          - name: = Trading Platform (Prod)
-      register: app_prod_lookup
-
     - name: Create security Incident
       servicenow.itsm.incident:
         state: new
         impact: high
         urgency: high
         short_description: >-
-          Critical kernel CVE detected — {{ advisory_id | default('RHSA-2025:8741') }}
+          Critical kernel CVE detected — {{ advisory_id | default('RHSA-2026:28741') }}
           affecting Trading Platform (6 RHEL hosts)
         description: |
           Red Hat Lightspeed detected a critical kernel security advisory
           affecting the Trading Platform infrastructure.
 
-          Advisory: {{ advisory_id | default('RHSA-2025:8741') }}
+          Advisory: {{ advisory_id | default('RHSA-2026:28741') }}
           Severity: {{ severity | default('Critical') }}
           Synopsis: {{ synopsis | default('Important: kernel security update') }}
           CVEs: {{ cve_list | default([]) | join(', ') }}
+          Trigger host: {{ affected_host | default('N/A') }}
 
           Affected services:
-            Trading Platform (Dev)  — rhel-dev-01, rhel-dev-02, rhel-dev-03
-            Trading Platform (Prod) — rhel-prod-01, rhel-prod-02, rhel-prod-03
+            Trading Platform (Dev)  — rhel-dev-01.{{ domain }}, rhel-dev-02.{{ domain }}, rhel-dev-03.{{ domain }}
+            Trading Platform (Prod) — rhel-prod-01.{{ domain }}, rhel-prod-02.{{ domain }}, rhel-prod-03.{{ domain }}
 
           Automated triage initiated by Event-Driven Ansible.
           AAP workflow will:
-            1. Run canary kpatch on dev fleet
-            2. Validate services post-patch
-            3. Raise emergency CR for production
-            4. Await approval, then kpatch production
-            5. Update CMDB CIs with new kernel version
+            1. Pre-check and assess all hosts in the Trading Platform fleet
+            2. Run canary kpatch on dev environment
+            3. Validate services post-patch
+            4. Raise emergency CR for production
+            5. Await approval, then kpatch production
+            6. Update CMDB CIs with new kernel version
         category: Software
         subcategory: Operating System
         caller: "{{ servicenow_caller | default('aap-svc-crenwick') }}"
@@ -65,13 +58,13 @@
         work_notes: |
           Affected Configuration Items:
           Dev environment:
-          - rhel-dev-01
-          - rhel-dev-02
-          - rhel-dev-03
+          - rhel-dev-01.{{ domain }}
+          - rhel-dev-02.{{ domain }}
+          - rhel-dev-03.{{ domain }}
           Prod environment:
-          - rhel-prod-01
-          - rhel-prod-02
-          - rhel-prod-03
+          - rhel-prod-01.{{ domain }}
+          - rhel-prod-02.{{ domain }}
+          - rhel-prod-03.{{ domain }}
 
           Automated assessment in progress via AAP.
 

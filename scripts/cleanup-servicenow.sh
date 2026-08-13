@@ -45,7 +45,8 @@ echo "(scoped to exact demo names + records opened by ${SN_USER})"
 echo ""
 
 echo "=== Removing demo Linux Server CIs ==="
-for node in rhel-dev-01 rhel-dev-02 rhel-dev-03 rhel-prod-01 rhel-prod-02 rhel-prod-03; do
+DOMAIN="trading-demo.chrislab.dev"
+for node in rhel-dev-01.${DOMAIN} rhel-dev-02.${DOMAIN} rhel-dev-03.${DOMAIN} rhel-prod-01.${DOMAIN} rhel-prod-02.${DOMAIN} rhel-prod-03.${DOMAIN}; do
   delete_ci "cmdb_ci_linux_server" "$node"
 done
 

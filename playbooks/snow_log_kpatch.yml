@@ -27,8 +27,12 @@
           CVEs mitigated by kpatch: {{ cves_patched | default([]) | join(', ') }}
 
           Hosts requiring full kernel update + reboot:
-          - rhel-dev-01, rhel-dev-02, rhel-dev-03
-          - rhel-prod-01, rhel-prod-02, rhel-prod-03
+          - rhel-dev-01.trading-demo.chrislab.dev
+          - rhel-dev-02.trading-demo.chrislab.dev
+          - rhel-dev-03.trading-demo.chrislab.dev
+          - rhel-prod-01.trading-demo.chrislab.dev
+          - rhel-prod-02.trading-demo.chrislab.dev
+          - rhel-prod-03.trading-demo.chrislab.dev
 
           Action required: Schedule full kernel update + reboot within 30 days.
         priority: 3

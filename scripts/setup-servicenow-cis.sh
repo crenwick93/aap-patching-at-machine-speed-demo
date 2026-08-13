@@ -103,7 +103,8 @@ done
 # --- Linux Server CIs ---
 echo ""
 echo "=== Linux Servers ==="
-NODES="rhel-dev-01:Development rhel-dev-02:Development rhel-dev-03:Development rhel-prod-01:Production rhel-prod-02:Production rhel-prod-03:Production"
+DOMAIN="trading-demo.chrislab.dev"
+NODES="rhel-dev-01.${DOMAIN}:Development rhel-dev-02.${DOMAIN}:Development rhel-dev-03.${DOMAIN}:Development rhel-prod-01.${DOMAIN}:Production rhel-prod-02.${DOMAIN}:Production rhel-prod-03.${DOMAIN}:Production"
 
 for entry in $NODES; do
   node="${entry%%:*}"

@@ -16,7 +16,7 @@
           CVE remediation — {{ incident_outcome | default('success') }}.
 
           Strategy: kpatch (live kernel patching, zero downtime)
-          Hosts: rhel-dev-01/02/03, rhel-prod-01/02/03
+          Hosts: rhel-dev-01/02/03.trading-demo.chrislab.dev, rhel-prod-01/02/03.trading-demo.chrislab.dev
           {{ 'Emergency CR: ' ~ cr_number if cr_number is defined else '' }}
           {{ 'Follow-up CR: ' ~ followup_cr_number if followup_cr_number is defined else '' }}
 

@@ -16,12 +16,12 @@
         type: emergency
         state: new
         short_description: >-
-          Emergency kpatch — {{ advisory_id | default('RHSA-2025:8741') }}
+          Emergency kpatch — {{ advisory_id | default('RHSA-2026:28741') }}
           ({{ cves_patched | default([]) | length }} CVEs) — production fleet
         description: |
           Emergency Change Request for production kpatch deployment.
 
-          Advisory: {{ advisory_id | default('RHSA-2025:8741') }}
+          Advisory: {{ advisory_id | default('RHSA-2026:28741') }}
           Severity: {{ severity | default('Critical') }}
           Kernel: {{ kernel_version | default('unknown') }}
           CVEs: {{ cve_list | default([]) | join(', ') }}
@@ -31,7 +31,7 @@
           CANARY DEPLOYMENT EVIDENCE (Dev Environment)
           ══════════════════════════════════════════════════════
 
-          Dev hosts patched: rhel-dev-01, rhel-dev-02, rhel-dev-03
+          Dev hosts patched: rhel-dev-01.trading-demo.chrislab.dev, rhel-dev-02.trading-demo.chrislab.dev, rhel-dev-03.trading-demo.chrislab.dev
           Patch strategy: kpatch (live, zero downtime)
           CVEs remediated: {{ cves_patched | default([]) | join(', ') }}
           Services healthy post-patch: {{ services_healthy | default('yes') }}
@@ -43,9 +43,9 @@
           PRODUCTION HOSTS PENDING APPROVAL
           ══════════════════════════════════════════════════════
 
-          - rhel-prod-01
-          - rhel-prod-02
-          - rhel-prod-03
+          - rhel-prod-01.trading-demo.chrislab.dev
+          - rhel-prod-02.trading-demo.chrislab.dev
+          - rhel-prod-03.trading-demo.chrislab.dev
 
           Identical kpatch will be applied to production upon approval.
           Zero downtime expected — live kernel patching, no reboot.
