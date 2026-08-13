@@ -27,24 +27,24 @@
 
 - name: ServiceNow CR Approval Bridge
   hosts: all
+  execution_strategy: parallel
   sources:
     - servicenow.itsm.records:
         table: change_request
-        instance:
-          host: "{{ SN_HOST }}"
-          username: "{{ SN_USERNAME }}"
-          password: "{{ SN_PASSWORD }}"
         interval: 30
-        columns:
-          - sys_id
-          - number
-          - approval
-          - state
-          - short_description
-        sysparm_query: "approval=approved^state!=implement^short_descriptionLIKEEmergency kpatch"
+        remote_servicenow_timezone: "Europe/London"
+        sysparm_query: >
+          state=-1^short_descriptionLIKEEmergency kpatch
+      filters:
+        - ansible.eda.json_filter:
+        - ansible.eda.normalize_keys:
   rules:
-    - name: Emergency CR approved — relay approval to AAP
-      condition: event.approval == "approved"
+    - name: Emergency CR moved to Implement — relay approval to AAP
+      throttle:
+        once_within: 10 minutes
+        group_by_attributes:
+          - sys_id
+      condition: event.number is defined
       action:
         run_job_template:
           name: "Bridge CR Approval"
