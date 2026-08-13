@@ -1,0 +1,19 @@
+---
+- name: Update CR to Implementing
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Update Change Request state to Implement
+      servicenow.itsm.change_request:
+        sys_id: "{{ cr_sys_id }}"
+        state: implement
+        work_notes: |
+          Remediation workflow triggered by EDA.
+          CR approved in ServiceNow — proceeding with patching.
+          Timestamp: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
+
+    - name: Display update confirmation
+      ansible.builtin.debug:
+        msg: "CR {{ cr_number | default(cr_sys_id) }} moved to Implement state."

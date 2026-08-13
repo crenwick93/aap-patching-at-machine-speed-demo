@@ -1,0 +1,88 @@
+---
+- name: Assess Kernel Exposure
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Get running kernel version
+      ansible.builtin.command: uname -r
+      register: kernel_version_raw
+      changed_when: false
+
+    - name: Set kernel version fact
+      ansible.builtin.set_fact:
+        kernel_version: "{{ kernel_version_raw.stdout }}"
+
+    - name: Check for available kpatch-patch RPMs
+      ansible.builtin.shell: >
+        dnf --showduplicates list available 'kpatch-patch-{{ kernel_version | replace(".", "_") | replace("-", "_") }}*' 2>/dev/null | grep -c kpatch-patch || echo 0
+      register: kpatch_available
+      changed_when: false
+      failed_when: false
+
+    - name: Set kpatch eligibility fact
+      ansible.builtin.set_fact:
+        kpatch_eligible: "{{ (kpatch_available.stdout | int) > 0 }}"
+
+    - name: Get outstanding security advisories
+      ansible.builtin.command: dnf updateinfo list --security
+      register: security_advisories
+      changed_when: false
+      failed_when: false
+
+    - name: Count security advisories
+      ansible.builtin.set_fact:
+        advisory_count: "{{ security_advisories.stdout_lines | select('search', 'RHSA') | list | length }}"
+
+    - name: Get kernel-specific security advisories
+      ansible.builtin.command: dnf updateinfo list --security kernel
+      register: kernel_advisories
+      changed_when: false
+      failed_when: false
+
+    - name: Extract CVE list from kernel advisories
+      ansible.builtin.shell: >
+        dnf updateinfo info --security kernel 2>/dev/null | grep -oP 'CVE-\d{4}-\d+' | sort -u
+      register: cve_extraction
+      changed_when: false
+      failed_when: false
+
+    - name: Set CVE list fact
+      ansible.builtin.set_fact:
+        cve_list: "{{ cve_extraction.stdout_lines | default([]) }}"
+
+    - name: Install syft for SBOM generation (if not present)
+      ansible.builtin.shell: |
+        if ! command -v syft &>/dev/null; then
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+        fi
+      args:
+        creates: /usr/local/bin/syft
+
+    - name: Generate pre-patch CycloneDX SBOM
+      ansible.builtin.command: >
+        syft packages dir:/ --catalogers rpm-db-cataloger
+        -o cyclonedx-json
+        --file {{ sbom_before_path | default('/tmp/sbom-before.json') }}
+      changed_when: true
+
+    - name: Publish assessment data
+      ansible.builtin.set_stats:
+        data:
+          kernel_version: "{{ kernel_version }}"
+          advisory_count: "{{ advisory_count }}"
+          kpatch_eligible: "{{ kpatch_eligible }}"
+          cve_list: "{{ cve_list }}"
+          sbom_before_path: "{{ sbom_before_path | default('/tmp/sbom-before.json') }}"
+          assessment_timestamp: "{{ ansible_date_time.iso8601 }}"
+
+    - name: Display assessment summary
+      ansible.builtin.debug:
+        msg: |
+          === Kernel Exposure Assessment ===
+          Kernel: {{ kernel_version }}
+          Security advisories: {{ advisory_count }}
+          Kernel CVEs: {{ cve_list | length }}
+          Kpatch eligible: {{ kpatch_eligible }}
+          SBOM captured: {{ sbom_before_path | default('/tmp/sbom-before.json') }}

@@ -1,0 +1,87 @@
+---
+- name: Apply Patch
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    patch_strategy: "{{ patch_strategy | default('kpatch') }}"
+
+  tasks:
+    # ---- kpatch strategy: live patch, zero downtime ----
+    - name: Install kpatch-dnf plugin
+      ansible.builtin.dnf:
+        name: kpatch-dnf
+        state: present
+      when: patch_strategy == "kpatch"
+
+    - name: Install kpatch-patch for running kernel
+      ansible.builtin.command: dnf kpatch auto -y
+      register: kpatch_install
+      changed_when: "'Nothing to do' not in kpatch_install.stdout"
+      when: patch_strategy == "kpatch"
+
+    - name: Verify kpatch module loaded
+      ansible.builtin.command: kpatch list
+      register: kpatch_list
+      changed_when: false
+      when: patch_strategy == "kpatch"
+
+    - name: Extract CVEs patched by kpatch
+      ansible.builtin.shell: >
+        kpatch list 2>/dev/null | grep -oP 'CVE-\d{4}-\d+' | sort -u
+      register: kpatch_cves
+      changed_when: false
+      failed_when: false
+      when: patch_strategy == "kpatch"
+
+    # ---- full strategy: kernel update with reboot ----
+    - name: Update kernel packages
+      ansible.builtin.dnf:
+        name: kernel*
+        state: latest
+      register: kernel_update
+      when: patch_strategy == "full"
+
+    - name: Get latest installed kernel
+      ansible.builtin.shell: rpm -q kernel --last | head -1 | awk '{print $1}' | sed 's/kernel-//'
+      register: latest_kernel
+      changed_when: false
+      when: patch_strategy == "full"
+
+    - name: Set latest kernel as default
+      ansible.builtin.command: "grubby --set-default /boot/vmlinuz-{{ latest_kernel.stdout }}"
+      when:
+        - patch_strategy == "full"
+        - kernel_update.changed
+
+    - name: Reboot to apply new kernel
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        msg: "Rebooting for kernel update"
+      when:
+        - patch_strategy == "full"
+        - kernel_update.changed
+
+    - name: Verify running kernel after reboot
+      ansible.builtin.command: uname -r
+      register: post_reboot_kernel
+      changed_when: false
+      when: patch_strategy == "full"
+
+    # ---- common: publish results ----
+    - name: Publish patch results
+      ansible.builtin.set_stats:
+        data:
+          patch_result: success
+          strategy_used: "{{ patch_strategy }}"
+          cves_patched: "{{ kpatch_cves.stdout_lines | default([]) if patch_strategy == 'kpatch' else [] }}"
+          patch_timestamp: "{{ ansible_date_time.iso8601 }}"
+
+    - name: Display patch summary
+      ansible.builtin.debug:
+        msg: |
+          === Patch Applied ===
+          Strategy: {{ patch_strategy }}
+          CVEs patched: {{ kpatch_cves.stdout_lines | default([]) | length if patch_strategy == 'kpatch' else 'N/A (full update)' }}
+          Reboot required: {{ 'no' if patch_strategy == 'kpatch' else 'yes' }}

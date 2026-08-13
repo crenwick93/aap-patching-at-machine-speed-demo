@@ -1,0 +1,106 @@
+---
+- name: Validate and Audit
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    sbom_before: "{{ sbom_before_path | default('/tmp/sbom-before.json') }}"
+    sbom_after: "{{ sbom_after_path | default('/tmp/sbom-after.json') }}"
+
+  tasks:
+    - name: Verify kernel is running
+      ansible.builtin.command: uname -r
+      register: running_kernel
+      changed_when: false
+
+    - name: Verify kpatch is loaded (kpatch strategy)
+      ansible.builtin.command: kpatch list
+      register: kpatch_status
+      changed_when: false
+      failed_when: false
+      when: strategy_used | default('kpatch') == 'kpatch'
+
+    - name: Check critical services post-patch
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+      register: post_service_status
+      loop: "{{ critical_services | default(['sshd', 'chronyd']) }}"
+
+    - name: Assert services are healthy post-patch
+      ansible.builtin.assert:
+        that:
+          - item.status.ActiveState == "active"
+        fail_msg: "Service {{ item.item }} is NOT active after patching"
+        success_msg: "Service {{ item.item }} is healthy"
+      loop: "{{ post_service_status.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Generate post-patch CycloneDX SBOM
+      ansible.builtin.command: >
+        syft packages dir:/ --catalogers rpm-db-cataloger
+        -o cyclonedx-json
+        --file {{ sbom_after }}
+      changed_when: true
+
+    - name: Check if pre-patch SBOM exists
+      ansible.builtin.stat:
+        path: "{{ sbom_before }}"
+      register: sbom_before_stat
+
+    - name: Compute SBOM diff
+      ansible.builtin.shell: |
+        python3 -c "
+        import json, sys
+        before = json.load(open('{{ sbom_before }}'))
+        after = json.load(open('{{ sbom_after }}'))
+        before_pkgs = {c['name']: c.get('version','') for c in before.get('components',[])}
+        after_pkgs = {c['name']: c.get('version','') for c in after.get('components',[])}
+        added = set(after_pkgs) - set(before_pkgs)
+        removed = set(before_pkgs) - set(after_pkgs)
+        changed = {p for p in before_pkgs if p in after_pkgs and before_pkgs[p] != after_pkgs[p]}
+        result = {
+          'added': sorted(added),
+          'removed': sorted(removed),
+          'changed': {p: {'before': before_pkgs[p], 'after': after_pkgs[p]} for p in sorted(changed)},
+          'total_before': len(before_pkgs),
+          'total_after': len(after_pkgs)
+        }
+        json.dump(result, sys.stdout, indent=2)
+        "
+      register: sbom_diff_raw
+      changed_when: false
+      when: sbom_before_stat.stat.exists
+
+    - name: Set SBOM diff fact
+      ansible.builtin.set_fact:
+        sbom_diff: "{{ sbom_diff_raw.stdout | from_json }}"
+      when: sbom_before_stat.stat.exists
+
+    - name: Build audit artefact
+      ansible.builtin.set_fact:
+        audit_report: |
+          === Patch Validation Report ===
+          Host: {{ inventory_hostname }}
+          Timestamp: {{ ansible_date_time.iso8601 }}
+          Kernel: {{ running_kernel.stdout }}
+          Strategy: {{ strategy_used | default('kpatch') }}
+          Services healthy: yes
+          SBOM packages before: {{ sbom_diff.total_before | default('N/A') }}
+          SBOM packages after: {{ sbom_diff.total_after | default('N/A') }}
+          RPMs added: {{ sbom_diff.added | default([]) | length }}
+          RPMs removed: {{ sbom_diff.removed | default([]) | length }}
+          RPMs changed: {{ sbom_diff.changed | default({}) | length }}
+
+    - name: Display audit report
+      ansible.builtin.debug:
+        msg: "{{ audit_report }}"
+
+    - name: Publish validation data
+      ansible.builtin.set_stats:
+        data:
+          audit_report: "{{ audit_report }}"
+          services_healthy: true
+          sbom_diff_summary: "{{ sbom_diff | default({}) }}"
+          validation_timestamp: "{{ ansible_date_time.iso8601 }}"

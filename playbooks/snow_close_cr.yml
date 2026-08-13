@@ -1,0 +1,36 @@
+---
+- name: Close Change Request
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    cr_close_code: "{{ cr_close_code | default('successful') }}"
+
+  tasks:
+    - name: Build close notes
+      ansible.builtin.set_fact:
+        close_notes: |
+          Patching completed — {{ cr_close_code }}.
+
+          Strategy: {{ strategy_used | default('full') }}
+          CVEs patched: {{ cves_patched | default([]) | join(', ') }}
+          Services healthy: {{ services_healthy | default('unknown') }}
+
+          SBOM Diff Summary:
+          - Packages added: {{ sbom_diff_summary.added | default([]) | length }}
+          - Packages removed: {{ sbom_diff_summary.removed | default([]) | length }}
+          - Packages changed: {{ sbom_diff_summary.changed | default({}) | length }}
+
+          {{ audit_report | default('') }}
+
+    - name: Close Change Request
+      servicenow.itsm.change_request:
+        sys_id: "{{ cr_sys_id }}"
+        state: closed
+        close_code: "{{ cr_close_code }}"
+        close_notes: "{{ close_notes }}"
+
+    - name: Display close confirmation
+      ansible.builtin.debug:
+        msg: "CR {{ cr_number | default(cr_sys_id) }} closed as {{ cr_close_code }}."

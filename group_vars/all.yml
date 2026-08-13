@@ -1,0 +1,14 @@
+---
+patch_strategy: kpatch
+
+sbom_before_path: /tmp/sbom-before.json
+sbom_after_path: /tmp/sbom-after.json
+
+precheck_disk_min_mb: 1024
+precheck_boot_min_mb: 100
+precheck_memory_min_mb: 256
+precheck_load_max: 4.0
+
+critical_services:
+  - sshd
+  - chronyd

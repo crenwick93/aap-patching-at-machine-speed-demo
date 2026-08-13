@@ -1,0 +1,335 @@
+---
+# =============================================================================
+# AAP Configuration as Code — Patching at Machine Speed
+# =============================================================================
+
+# Using the Default organization
+
+# -----------------------------------------------------------------------------
+# Credentials
+# -----------------------------------------------------------------------------
+controller_credentials:
+  - name: "Colombo Demo SSH"
+    description: "SSH access to demo EC2 instances (ec2-user)"
+    organization: "Default"
+    credential_type: "Machine"
+    inputs:
+      username: ec2-user
+      ssh_key_data: "{{ probe_ssh_key }}"
+
+  - name: "AWS Demo"
+    description: "AWS credentials for dynamic EC2 inventory discovery"
+    organization: "Default"
+    credential_type: "Amazon Web Services"
+    inputs:
+      username: "{{ aws_access_key }}"
+      password: "{{ aws_secret_key }}"
+
+  - name: "ServiceNow PDI"
+    description: "ServiceNow developer instance for ITSM integration"
+    organization: "Default"
+    credential_type: "ServiceNow Credential"
+    inputs:
+      SN_HOST: "{{ servicenow_instance_url }}"
+      SN_USERNAME: "{{ servicenow_username }}"
+      SN_PASSWORD: "{{ servicenow_password }}"
+
+# -----------------------------------------------------------------------------
+# Projects
+# -----------------------------------------------------------------------------
+controller_projects:
+  - name: "Patching at Machine Speed"
+    description: "EDA-driven enterprise kernel patching with ServiceNow governance"
+    organization: "Default"
+    scm_type: "git"
+    scm_url: "{{ git_repo_url }}"
+    scm_branch: "main"
+    scm_update_on_launch: true
+
+# -----------------------------------------------------------------------------
+# Inventories
+# -----------------------------------------------------------------------------
+controller_inventories:
+  - name: "Colombo Demo"
+    description: "Demo RHEL instances discovered dynamically from AWS EC2 tags"
+    organization: "Default"
+
+# -----------------------------------------------------------------------------
+# Inventory Sources (dynamic — AWS EC2)
+# -----------------------------------------------------------------------------
+controller_inventory_sources:
+  - name: "AWS EC2 Discovery"
+    inventory: "Colombo Demo"
+    source: "ec2"
+    credential: "AWS Demo"
+    overwrite: true
+    update_on_launch: true
+    source_vars:
+      plugin: amazon.aws.aws_ec2
+      regions:
+        - eu-west-1
+      filters:
+        "tag:demo": patching
+      hostnames:
+        - public-ip-address
+      compose:
+        ansible_user: "'ec2-user'"
+        ansible_become: "true"
+
+# -----------------------------------------------------------------------------
+# Job Templates
+# -----------------------------------------------------------------------------
+controller_templates:
+  - name: "Pre-check System Readiness"
+    description: "Gate: disk, memory, services, load — is this system safe to patch?"
+    organization: "Default"
+    job_type: "run"
+    project: "Patching at Machine Speed"
+    playbook: "playbooks/precheck.yml"
+    inventory: "Colombo Demo"
+    credentials:
+      - "Colombo Demo SSH"
+
+  - name: "Assess Kernel Exposure"
+    description: "Intelligence: kernel version, advisories, CVEs, kpatch eligibility, SBOM"
+    organization: "Default"
+    job_type: "run"
+    project: "Patching at Machine Speed"
+    playbook: "playbooks/assess.yml"
+    inventory: "Colombo Demo"
+    credentials:
+      - "Colombo Demo SSH"
+
+  - name: "Kpatch Decision"
+    description: "Decision gate: succeeds if kpatch available, fails if full update needed"
+    organization: "Default"
+    job_type: "run"
+    project: "Patching at Machine Speed"
+    playbook: "playbooks/kpatch_decision.yml"
+    inventory: "Colombo Demo"
+    credentials:
+      - "Colombo Demo SSH"
+
+  - name: "Apply Patch"
+    description: "Apply kpatch (live) or full kernel update (reboot) based on patch_strategy"
+    organization: "Default"
+    job_type: "run"
+    project: "Patching at Machine Speed"
+    playbook: "playbooks/patch.yml"
+    inventory: "Colombo Demo"
+    ask_variables_on_launch: true
+    credentials:
+      - "Colombo Demo SSH"
+
+  - name: "Validate and Audit"
+    description: "Post-patch checks: services, SBOM diff, audit artefact"
+    organization: "Default"
+    job_type: "run"
+    project: "Patching at Machine Speed"
+    playbook: "playbooks/validate.yml"
+    inventory: "Colombo Demo"
+    credentials:
+      - "Colombo Demo SSH"
+
+  - name: "Log Kpatch to ServiceNow"
+    description: "Create + close standard CR as audit trail (kpatch auto path)"
+    organization: "Default"
+    job_type: "run"
+    project: "Patching at Machine Speed"
+    playbook: "playbooks/snow_log_kpatch.yml"
+    inventory: "Demo Inventory"
+    credentials:
+      - "ServiceNow PDI"
+
+  - name: "Open Change Request"
+    description: "Create normal CR in ServiceNow (full update path, approval required)"
+    organization: "Default"
+    job_type: "run"
+    project: "Patching at Machine Speed"
+    playbook: "playbooks/snow_open_cr.yml"
+    inventory: "Demo Inventory"
+    credentials:
+      - "ServiceNow PDI"
+
+  - name: "Update CR: Implementing"
+    description: "Update CR state to Implement in ServiceNow"
+    organization: "Default"
+    job_type: "run"
+    project: "Patching at Machine Speed"
+    playbook: "playbooks/snow_update_cr.yml"
+    inventory: "Demo Inventory"
+    credentials:
+      - "ServiceNow PDI"
+
+  - name: "Close Change Request"
+    description: "Close CR with outcome, SBOM diff, and audit summary"
+    organization: "Default"
+    job_type: "run"
+    project: "Patching at Machine Speed"
+    playbook: "playbooks/snow_close_cr.yml"
+    inventory: "Demo Inventory"
+    credentials:
+      - "ServiceNow PDI"
+
+  - name: "Reset Demo State"
+    description: "Utility: remove kpatch, clean artefacts for demo replay"
+    organization: "Default"
+    job_type: "run"
+    project: "Patching at Machine Speed"
+    playbook: "playbooks/reset.yml"
+    inventory: "Colombo Demo"
+    credentials:
+      - "Colombo Demo SSH"
+
+# -----------------------------------------------------------------------------
+# Workflow Templates
+# -----------------------------------------------------------------------------
+controller_workflows:
+  - name: "CVE Triage"
+    description: >-
+      Phase 1: Pre-check, assess exposure, then branch —
+      kpatch (auto-remediate + audit) or full update (open CR, await approval).
+    organization: "Default"
+    ask_variables_on_launch: true
+    simplified_workflow_nodes:
+      - identifier: "Pre-check System Readiness"
+        unified_job_template: "Pre-check System Readiness"
+        success_nodes:
+          - "Assess Kernel Exposure"
+
+      - identifier: "Assess Kernel Exposure"
+        unified_job_template: "Assess Kernel Exposure"
+        success_nodes:
+          - "Kpatch Decision"
+
+      - identifier: "Kpatch Decision"
+        unified_job_template: "Kpatch Decision"
+        success_nodes:
+          - "Apply Patch (kpatch)"
+        failure_nodes:
+          - "Open Change Request"
+
+      # --- kpatch path (automated) ---
+      - identifier: "Apply Patch (kpatch)"
+        unified_job_template: "Apply Patch"
+        extra_data:
+          patch_strategy: kpatch
+        success_nodes:
+          - "Validate and Audit (kpatch)"
+        failure_nodes:
+          - "Log Kpatch to ServiceNow (failed)"
+
+      - identifier: "Validate and Audit (kpatch)"
+        unified_job_template: "Validate and Audit"
+        success_nodes:
+          - "Log Kpatch to ServiceNow"
+        failure_nodes:
+          - "Log Kpatch to ServiceNow (failed)"
+
+      - identifier: "Log Kpatch to ServiceNow"
+        unified_job_template: "Log Kpatch to ServiceNow"
+
+      - identifier: "Log Kpatch to ServiceNow (failed)"
+        unified_job_template: "Log Kpatch to ServiceNow"
+
+      # --- full update path (governed) ---
+      - identifier: "Open Change Request"
+        unified_job_template: "Open Change Request"
+
+  - name: "CVE Remediation"
+    description: >-
+      Phase 2: Triggered by ServiceNow CR approval.
+      Update CR, apply full kernel update, validate, close CR.
+    organization: "Default"
+    ask_variables_on_launch: true
+    simplified_workflow_nodes:
+      - identifier: "Update CR: Implementing"
+        unified_job_template: "Update CR: Implementing"
+        success_nodes:
+          - "Apply Patch (full)"
+
+      - identifier: "Apply Patch (full)"
+        unified_job_template: "Apply Patch"
+        extra_data:
+          patch_strategy: full
+        success_nodes:
+          - "Validate and Audit"
+        failure_nodes:
+          - "Close CR: Failed"
+
+      - identifier: "Validate and Audit"
+        unified_job_template: "Validate and Audit"
+        success_nodes:
+          - "Close CR: Successful"
+        failure_nodes:
+          - "Close CR: Failed"
+
+      - identifier: "Close CR: Successful"
+        unified_job_template: "Close Change Request"
+        extra_data:
+          cr_close_code: successful
+
+      - identifier: "Close CR: Failed"
+        unified_job_template: "Close Change Request"
+        extra_data:
+          cr_close_code: unsuccessful
+
+# =============================================================================
+# Event-Driven Ansible
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# EDA Decision Environments
+# -----------------------------------------------------------------------------
+eda_decision_environments:
+  - name: "ServiceNow DE"
+    description: "Decision environment with servicenow.itsm for CR polling"
+    organization: "Default"
+    image_url: "quay.io/crenwick93/snow-de:latest"
+
+# -----------------------------------------------------------------------------
+# EDA Projects
+# -----------------------------------------------------------------------------
+eda_projects:
+  - name: "Patching at Machine Speed"
+    description: "EDA rulebooks for CVE triage and ServiceNow-driven remediation"
+    organization: "Default"
+    url: "{{ git_repo_url }}"
+    wait: true
+
+# -----------------------------------------------------------------------------
+# EDA Credentials
+# -----------------------------------------------------------------------------
+eda_credentials:
+  - name: "AAP Controller Token"
+    description: "Controller credential so EDA can launch workflow templates"
+    credential_type: "Red Hat Ansible Automation Platform"
+    organization: "Default"
+    inputs:
+      host: "{{ (aap_hostname | regex_replace('/+$','')) ~ '/api/controller/' }}"
+      oauth_token: "{{ aap_token }}"
+      verify_ssl: "{{ aap_validate_certs }}"
+
+  - name: "ServiceNow EDA"
+    description: "ServiceNow credentials for the EDA records source plugin"
+    credential_type: "ServiceNow Credential"
+    organization: "Default"
+    inputs:
+      SN_HOST: "{{ servicenow_instance_url }}"
+      SN_USERNAME: "{{ servicenow_username }}"
+      SN_PASSWORD: "{{ servicenow_password }}"
+
+# -----------------------------------------------------------------------------
+# Rulebook Activations
+# -----------------------------------------------------------------------------
+eda_rulebook_activations:
+  - name: "CVE Response"
+    description: "Monitors Lightspeed for CVE events and ServiceNow for CR approvals"
+    organization: "Default"
+    project: "Patching at Machine Speed"
+    rulebook: "cve_response.yml"
+    decision_environment: "ServiceNow DE"
+    enabled: true
+    eda_credentials:
+      - "AAP Controller Token"
+      - "ServiceNow EDA"

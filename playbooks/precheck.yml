@@ -1,0 +1,82 @@
+---
+- name: Pre-check System Readiness
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    disk_min_mb: "{{ precheck_disk_min_mb | default(1024) }}"
+    boot_min_mb: "{{ precheck_boot_min_mb | default(100) }}"
+    memory_min_mb: "{{ precheck_memory_min_mb | default(256) }}"
+    load_max: "{{ precheck_load_max | default(4.0) }}"
+    critical_services: "{{ critical_services | default(['sshd', 'chronyd']) }}"
+
+  tasks:
+    - name: Check root filesystem free space
+      ansible.builtin.assert:
+        that:
+          - (ansible_mounts | selectattr('mount', 'equalto', '/') | first).size_available > (disk_min_mb | int * 1048576)
+        fail_msg: "Root filesystem has less than {{ disk_min_mb }}MB free"
+        success_msg: "Root filesystem OK"
+
+    - name: Check /boot free space
+      ansible.builtin.assert:
+        that:
+          - (ansible_mounts | selectattr('mount', 'equalto', '/boot') | first).size_available > (boot_min_mb | int * 1048576)
+        fail_msg: "/boot has less than {{ boot_min_mb }}MB free"
+        success_msg: "/boot OK"
+      when: ansible_mounts | selectattr('mount', 'equalto', '/boot') | list | length > 0
+
+    - name: Check available memory
+      ansible.builtin.assert:
+        that:
+          - ansible_memfree_mb > (memory_min_mb | int)
+        fail_msg: "Less than {{ memory_min_mb }}MB free memory ({{ ansible_memfree_mb }}MB available)"
+        success_msg: "Memory OK ({{ ansible_memfree_mb }}MB free)"
+
+    - name: Check system load
+      ansible.builtin.assert:
+        that:
+          - ansible_loadavg['1m'] < (load_max | float)
+        fail_msg: "1-minute load average {{ ansible_loadavg['1m'] }} exceeds threshold {{ load_max }}"
+        success_msg: "Load OK ({{ ansible_loadavg['1m'] }})"
+
+    - name: Check critical services are running
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+      register: service_status
+      loop: "{{ critical_services }}"
+
+    - name: Assert critical services are active
+      ansible.builtin.assert:
+        that:
+          - item.status.ActiveState == "active"
+        fail_msg: "Service {{ item.item }} is not active ({{ item.status.ActiveState }})"
+        success_msg: "Service {{ item.item }} is active"
+      loop: "{{ service_status.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Check for pending reboot (needs-restarting)
+      ansible.builtin.command: needs-restarting -r
+      register: reboot_check
+      changed_when: false
+      failed_when: false
+
+    - name: Assert no pending reboot
+      ansible.builtin.assert:
+        that:
+          - reboot_check.rc == 0
+        fail_msg: "System has a pending reboot"
+        success_msg: "No pending reboot"
+
+    - name: Publish pre-check summary
+      ansible.builtin.set_stats:
+        data:
+          precheck_summary:
+            disk_ok: true
+            memory_ok: true
+            services_ok: true
+            load_ok: true
+            no_pending_reboot: true
+            timestamp: "{{ ansible_date_time.iso8601 }}"

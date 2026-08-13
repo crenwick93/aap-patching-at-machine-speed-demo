@@ -1,0 +1,42 @@
+---
+- name: CVE Triage
+  hosts: all
+  sources:
+    - name: insights_events
+      ansible.eda.webhook:
+        host: 0.0.0.0
+        port: 5000
+  rules:
+    - name: Critical CVE advisory detected
+      condition: event.payload.application == "vulnerability"
+      action:
+        run_workflow_template:
+          name: "CVE Triage"
+          organization: Default
+          job_args:
+            extra_vars:
+              advisory_id: "{{ event.payload.advisory_id | default('RHSA-SIMULATED') }}"
+              severity: "{{ event.payload.severity | default('Critical') }}"
+              cve_list: "{{ event.payload.cve_list | default([]) }}"
+
+- name: CVE Remediation
+  hosts: all
+  sources:
+    - servicenow.itsm.records:
+        table: change_request
+        instance:
+          host: "{{ SERVICENOW_INSTANCE_URL }}"
+          username: "{{ SERVICENOW_USERNAME }}"
+          password: "{{ SERVICENOW_PASSWORD }}"
+        sysparm_query: "approval=approved^stateONschedule"
+  rules:
+    - name: Change Request approved
+      condition: event.approval == "approved"
+      action:
+        run_workflow_template:
+          name: "CVE Remediation"
+          organization: Default
+          job_args:
+            extra_vars:
+              cr_sys_id: "{{ event.sys_id }}"
+              cr_number: "{{ event.number }}"

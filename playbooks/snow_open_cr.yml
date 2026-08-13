@@ -1,0 +1,50 @@
+---
+- name: Open Change Request
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Create normal Change Request
+      servicenow.itsm.change_request:
+        type: normal
+        state: new
+        short_description: >-
+          Kernel advisory response — {{ advisory_count | default('N/A') }} security advisories,
+          {{ cve_list | default([]) | length }} CVEs on {{ kernel_version | default('unknown') }}
+        description: |
+          Automated triage by AAP Patching at Machine Speed workflow.
+
+          Assessment Summary:
+          - Kernel: {{ kernel_version | default('unknown') }}
+          - Security advisories: {{ advisory_count | default('N/A') }}
+          - Kernel CVEs: {{ cve_list | default([]) | join(', ') }}
+          - Kpatch eligible: {{ kpatch_eligible | default('N/A') }}
+          - SBOM captured: {{ sbom_before_path | default('/tmp/sbom-before.json') }}
+
+          Pre-check Summary:
+          {{ precheck_summary | default({}) | to_nice_yaml }}
+
+          Recommended action: Full kernel update (kpatch not available).
+          Approval required before remediation proceeds.
+        priority: 2
+        risk: moderate
+        impact: 2
+        category: Software
+        assignment_group: "CAB Approval"
+      register: cr_result
+
+    - name: Display CR details
+      ansible.builtin.debug:
+        msg: |
+          === Change Request Created ===
+          Number: {{ cr_result.record.number }}
+          Sys ID: {{ cr_result.record.sys_id }}
+          State: {{ cr_result.record.state }}
+          Awaiting approval in ServiceNow.
+
+    - name: Publish CR identifiers
+      ansible.builtin.set_stats:
+        data:
+          cr_sys_id: "{{ cr_result.record.sys_id }}"
+          cr_number: "{{ cr_result.record.number }}"

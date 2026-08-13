@@ -1,0 +1,6 @@
+.env
+*.pem
+colombo-demo.pem
+.ansible/
+context/
+collections/

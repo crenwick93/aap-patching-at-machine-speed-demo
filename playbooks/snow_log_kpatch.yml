@@ -1,0 +1,56 @@
+---
+- name: Log Kpatch to ServiceNow
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Create standard Change Request (audit trail)
+      servicenow.itsm.change_request:
+        type: standard
+        state: new
+        short_description: >-
+          [AUTO] Kpatch applied — {{ cves_patched | default([]) | length }} CVEs patched
+          on kernel {{ kernel_version | default('unknown') }}
+        description: |
+          Automated kpatch applied by AAP — no approval required.
+          Live patch, zero downtime, zero service interruption.
+
+          Assessment:
+          - Kernel: {{ kernel_version | default('unknown') }}
+          - Security advisories: {{ advisory_count | default('N/A') }}
+          - Kpatch eligible: true
+
+          Patch Result:
+          - Strategy: kpatch
+          - CVEs patched: {{ cves_patched | default([]) | join(', ') }}
+
+          Validation:
+          - Services healthy: {{ services_healthy | default('unknown') }}
+          - SBOM diff: {{ sbom_diff_summary.changed | default({}) | length }} RPMs changed
+
+          {{ audit_report | default('') }}
+        priority: 4
+        risk: none
+        impact: 3
+        category: Software
+      register: cr_result
+
+    - name: Close standard CR immediately
+      servicenow.itsm.change_request:
+        sys_id: "{{ cr_result.record.sys_id }}"
+        state: closed
+        close_code: successful
+        close_notes: |
+          Kpatch auto-remediation completed successfully.
+          No approval was required — standard change, zero-risk live patch.
+          Full audit trail attached above.
+
+    - name: Display audit confirmation
+      ansible.builtin.debug:
+        msg: |
+          === ServiceNow Audit Record ===
+          CR Number: {{ cr_result.record.number }}
+          Type: Standard (auto-approved)
+          Status: Closed - Successful
+          CVEs patched: {{ cves_patched | default([]) | length }}
