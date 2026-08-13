@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Remove demo CIs, Incidents, and Change Requests from ServiceNow.
-# Run this to reset ServiceNow state between demo runs.
+# Remove demo CIs, services, Incidents, and Change Requests from ServiceNow.
+# Safe for shared instances — scoped to exact CI names and records opened by
+# the service account only.
 #
 # Usage: ./scripts/cleanup-servicenow.sh
 
@@ -18,15 +19,12 @@ SN_HOST="${SERVICENOW_INSTANCE_URL:?Set SERVICENOW_INSTANCE_URL in .env}"
 SN_USER="${SERVICENOW_USERNAME:?Set SERVICENOW_USERNAME in .env}"
 SN_PASS="${SERVICENOW_PASSWORD:?Set SERVICENOW_PASSWORD in .env}"
 
-NODES=("rhel-dev-01" "rhel-dev-02" "rhel-dev-03" "rhel-prod-01" "rhel-prod-02" "rhel-prod-03")
-
-echo "Cleaning up ServiceNow demo artefacts..."
-echo ""
-
-echo "=== Removing demo CIs ==="
-for node in "${NODES[@]}"; do
+# Helper: delete CI by exact name from a table
+delete_ci() {
+  local table="$1" name="$2"
+  local sys_id
   sys_id=$(curl -s -u "${SN_USER}:${SN_PASS}" \
-    "${SN_HOST}/api/now/table/cmdb_ci_linux_server?sysparm_query=name=${node}&sysparm_fields=sys_id" \
+    "${SN_HOST}/api/now/table/${table}?sysparm_query=name=${name}&sysparm_fields=sys_id" \
     -H "Accept: application/json" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
@@ -34,18 +32,36 @@ print(d['result'][0]['sys_id'] if d.get('result') else '')
 " 2>/dev/null)
 
   if [[ -n "$sys_id" ]]; then
-    curl -s -o /dev/null -w "  ${node}: HTTP %{http_code}\n" -u "${SN_USER}:${SN_PASS}" \
-      -X DELETE "${SN_HOST}/api/now/table/cmdb_ci_linux_server/${sys_id}" \
+    curl -s -o /dev/null -w "  ${name}: HTTP %{http_code}\n" -u "${SN_USER}:${SN_PASS}" \
+      -X DELETE "${SN_HOST}/api/now/table/${table}/${sys_id}" \
       -H "Accept: application/json"
   else
-    echo "  ${node}: not found"
+    echo "  ${name}: not found"
   fi
+}
+
+echo "Cleaning up ServiceNow demo artefacts..."
+echo "(scoped to exact demo names + records opened by ${SN_USER})"
+echo ""
+
+echo "=== Removing demo Linux Server CIs ==="
+for node in rhel-dev-01 rhel-dev-02 rhel-dev-03 rhel-prod-01 rhel-prod-02 rhel-prod-03; do
+  delete_ci "cmdb_ci_linux_server" "$node"
 done
 
 echo ""
-echo "=== Removing demo Incidents (short_description contains 'CVE') ==="
+echo "=== Removing demo Application Services ==="
+delete_ci "cmdb_ci_appl" "Trading Platform (Dev)"
+delete_ci "cmdb_ci_appl" "Trading Platform (Prod)"
+
+echo ""
+echo "=== Removing demo Business Service ==="
+delete_ci "cmdb_ci_service" "Trading Platform"
+
+echo ""
+echo "=== Removing demo Incidents (opened by ${SN_USER} with 'CVE' in description) ==="
 curl -s -u "${SN_USER}:${SN_PASS}" \
-  "${SN_HOST}/api/now/table/incident?sysparm_query=short_descriptionLIKECVE^short_descriptionLIKEkernel&sysparm_fields=sys_id,number,short_description" \
+  "${SN_HOST}/api/now/table/incident?sysparm_query=opened_by.user_name=${SN_USER}^short_descriptionLIKECVE&sysparm_fields=sys_id,number,short_description" \
   -H "Accept: application/json" | python3 -c "
 import json,sys,subprocess
 d=json.load(sys.stdin)
@@ -60,9 +76,9 @@ if not d.get('result'):
 "
 
 echo ""
-echo "=== Removing demo Change Requests (kpatch or kernel related) ==="
+echo "=== Removing demo Change Requests (opened by ${SN_USER} with 'kpatch' or 'kernel') ==="
 curl -s -u "${SN_USER}:${SN_PASS}" \
-  "${SN_HOST}/api/now/table/change_request?sysparm_query=short_descriptionLIKEkernel^ORshort_descriptionLIKEkpatch^ORshort_descriptionLIKEKpatch&sysparm_fields=sys_id,number,short_description" \
+  "${SN_HOST}/api/now/table/change_request?sysparm_query=opened_by.user_name=${SN_USER}^short_descriptionLIKEkpatch^ORshort_descriptionLIKEkernel&sysparm_fields=sys_id,number,short_description" \
   -H "Accept: application/json" | python3 -c "
 import json,sys,subprocess
 d=json.load(sys.stdin)

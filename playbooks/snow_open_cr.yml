@@ -5,6 +5,12 @@
   gather_facts: false
 
   tasks:
+    - name: Look up Trading Platform (Prod) in CMDB
+      servicenow.itsm.configuration_item_info:
+        query:
+          - name: = Trading Platform (Prod)
+      register: app_prod_lookup
+
     - name: Create emergency Change Request with canary evidence
       servicenow.itsm.change_request:
         type: emergency
@@ -52,6 +58,7 @@
         assignment_group: "CAB Approval"
         other:
           parent: "{{ inc_sys_id | default(omit) }}"
+          cmdb_ci: "{{ app_prod_lookup.records[0].sys_id | default(omit) }}"
       register: cr_result
 
     - name: Update Incident with CR reference

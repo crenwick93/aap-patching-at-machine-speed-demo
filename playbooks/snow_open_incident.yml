@@ -5,11 +5,23 @@
   gather_facts: false
 
   tasks:
-    - name: Look up primary CI in CMDB
+    - name: Look up Trading Platform business service
       servicenow.itsm.configuration_item_info:
         query:
-          - name: = rhel-dev-01
-      register: ci_lookup
+          - name: = Trading Platform
+      register: biz_svc_lookup
+
+    - name: Look up Trading Platform (Dev) application
+      servicenow.itsm.configuration_item_info:
+        query:
+          - name: = Trading Platform (Dev)
+      register: app_dev_lookup
+
+    - name: Look up Trading Platform (Prod) application
+      servicenow.itsm.configuration_item_info:
+        query:
+          - name: = Trading Platform (Prod)
+      register: app_prod_lookup
 
     - name: Create security Incident
       servicenow.itsm.incident:
@@ -18,18 +30,19 @@
         urgency: high
         short_description: >-
           Critical kernel CVE detected — {{ advisory_id | default('RHSA-2025:8741') }}
-          affecting 6 RHEL hosts
+          affecting Trading Platform (6 RHEL hosts)
         description: |
-          Red Hat Lightspeed detected a critical kernel security advisory.
+          Red Hat Lightspeed detected a critical kernel security advisory
+          affecting the Trading Platform infrastructure.
 
           Advisory: {{ advisory_id | default('RHSA-2025:8741') }}
           Severity: {{ severity | default('Critical') }}
           Synopsis: {{ synopsis | default('Important: kernel security update') }}
           CVEs: {{ cve_list | default([]) | join(', ') }}
 
-          Affected hosts (6):
-            Dev:  rhel-dev-01, rhel-dev-02, rhel-dev-03
-            Prod: rhel-prod-01, rhel-prod-02, rhel-prod-03
+          Affected services:
+            Trading Platform (Dev)  — rhel-dev-01, rhel-dev-02, rhel-dev-03
+            Trading Platform (Prod) — rhel-prod-01, rhel-prod-02, rhel-prod-03
 
           Automated triage initiated by Event-Driven Ansible.
           AAP workflow will:
@@ -41,7 +54,9 @@
         category: Software
         subcategory: Operating System
         caller: "{{ servicenow_caller | default('aap-svc-crenwick') }}"
-        cmdb_ci: "{{ ci_lookup.records[0].sys_id | default(omit) }}"
+        cmdb_ci: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
+        other:
+          business_service: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
       register: inc_result
 
     - name: Add affected CIs as work note
