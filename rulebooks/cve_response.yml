@@ -1,5 +1,5 @@
 ---
-- name: CVE Triage
+- name: CVE Response
   hosts: all
   sources:
     - name: insights_events
@@ -11,7 +11,7 @@
       condition: event.payload.application == "vulnerability"
       action:
         run_workflow_template:
-          name: "CVE Triage"
+          name: "CVE Kpatch Response"
           organization: Default
           job_args:
             extra_vars:
@@ -19,7 +19,7 @@
               severity: "{{ event.payload.severity | default('Critical') }}"
               cve_list: "{{ event.payload.cve_list | default([]) }}"
 
-- name: CVE Remediation
+- name: ServiceNow CR Approval Bridge
   hosts: all
   sources:
     - servicenow.itsm.records:
@@ -28,15 +28,18 @@
           host: "{{ SERVICENOW_INSTANCE_URL }}"
           username: "{{ SERVICENOW_USERNAME }}"
           password: "{{ SERVICENOW_PASSWORD }}"
-        sysparm_query: "approval=approved^stateONschedule"
+        interval: 30
+        columns:
+          - sys_id
+          - number
+          - approval
+          - state
+          - short_description
+        sysparm_query: "approval=approved^state!=implement^short_descriptionLIKEEmergency kpatch"
   rules:
-    - name: Change Request approved
+    - name: Emergency CR approved — auto-approve AAP workflow
       condition: event.approval == "approved"
       action:
-        run_workflow_template:
-          name: "CVE Remediation"
+        run_job_template:
+          name: "Auto-approve Workflow"
           organization: Default
-          job_args:
-            extra_vars:
-              cr_sys_id: "{{ event.sys_id }}"
-              cr_number: "{{ event.number }}"

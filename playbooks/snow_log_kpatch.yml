@@ -1,56 +1,54 @@
 ---
-- name: Log Kpatch to ServiceNow
+- name: Log Follow-up Scheduled CR
   hosts: localhost
   connection: local
   gather_facts: false
 
   tasks:
-    - name: Create standard Change Request (audit trail)
+    - name: Create scheduled CR for follow-up full kernel update
       servicenow.itsm.change_request:
         type: standard
         state: new
         short_description: >-
-          [AUTO] Kpatch applied — {{ cves_patched | default([]) | length }} CVEs patched
-          on kernel {{ kernel_version | default('unknown') }}
+          [SCHEDULED] Full kernel update required — follow-up to {{ cr_number | default('emergency kpatch') }}
         description: |
-          Automated kpatch applied by AAP — no approval required.
-          Live patch, zero downtime, zero service interruption.
+          A kpatch was applied to mitigate immediate CVE risk across all environments
+          (dev canary + production), but kpatch is a stop-gap measure. Red Hat mandates
+          a full kernel update and reboot at least twice per year to remain within the
+          supported patch cadence.
 
-          Assessment:
-          - Kernel: {{ kernel_version | default('unknown') }}
-          - Security advisories: {{ advisory_count | default('N/A') }}
-          - Kpatch eligible: true
+          This CR tracks the follow-up full kernel update that should be completed
+          during the next scheduled maintenance window.
 
-          Patch Result:
-          - Strategy: kpatch
-          - CVEs patched: {{ cves_patched | default([]) | join(', ') }}
+          Related emergency CR: {{ cr_number | default('N/A') }}
+          Related Incident: {{ inc_number | default('N/A') }}
+          Advisory: {{ advisory_id | default('N/A') }}
+          Kernel: {{ kernel_version | default('unknown') }}
+          CVEs mitigated by kpatch: {{ cves_patched | default([]) | join(', ') }}
 
-          Validation:
-          - Services healthy: {{ services_healthy | default('unknown') }}
-          - SBOM diff: {{ sbom_diff_summary.changed | default({}) | length }} RPMs changed
+          Hosts requiring full kernel update + reboot:
+          - rhel-dev-01, rhel-dev-02, rhel-dev-03
+          - rhel-prod-01, rhel-prod-02, rhel-prod-03
 
-          {{ audit_report | default('') }}
-        priority: 4
-        risk: none
+          Action required: Schedule full kernel update + reboot within 30 days.
+        priority: 3
+        risk: low
         impact: 3
         category: Software
-      register: cr_result
+        other:
+          parent: "{{ inc_sys_id | default(omit) }}"
+      register: followup_cr
 
-    - name: Close standard CR immediately
-      servicenow.itsm.change_request:
-        sys_id: "{{ cr_result.record.sys_id }}"
-        state: closed
-        close_code: successful
-        close_notes: |
-          Kpatch auto-remediation completed successfully.
-          No approval was required — standard change, zero-risk live patch.
-          Full audit trail attached above.
-
-    - name: Display audit confirmation
+    - name: Display follow-up CR confirmation
       ansible.builtin.debug:
         msg: |
-          === ServiceNow Audit Record ===
-          CR Number: {{ cr_result.record.number }}
-          Type: Standard (auto-approved)
-          Status: Closed - Successful
-          CVEs patched: {{ cves_patched | default([]) | length }}
+          === Follow-up CR Created ===
+          Number: {{ followup_cr.record.number }}
+          Type: Standard (scheduled)
+          Action: Full kernel update + reboot within 30 days
+          Linked to: {{ inc_number | default('N/A') }}
+
+    - name: Publish follow-up CR identifiers
+      ansible.builtin.set_stats:
+        data:
+          followup_cr_number: "{{ followup_cr.record.number }}"

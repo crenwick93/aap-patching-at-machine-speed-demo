@@ -1,0 +1,40 @@
+---
+- name: Auto-approve Pending Workflow
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    controller_url: "{{ lookup('env', 'CONTROLLER_HOST') | regex_replace('/+$', '') }}"
+    controller_token: "{{ lookup('env', 'CONTROLLER_OAUTH_TOKEN') }}"
+    controller_verify: "{{ lookup('env', 'CONTROLLER_VERIFY_SSL') | default('false') | bool }}"
+
+  tasks:
+    - name: Find pending workflow approvals
+      ansible.builtin.uri:
+        url: "{{ controller_url }}/api/controller/v2/workflow_approvals/?status=pending"
+        headers:
+          Authorization: "Bearer {{ controller_token }}"
+        validate_certs: "{{ controller_verify }}"
+        return_content: true
+      register: pending
+
+    - name: Approve pending workflow nodes
+      ansible.builtin.uri:
+        url: "{{ controller_url }}/api/controller/v2/workflow_approvals/{{ item.id }}/approve/"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ controller_token }}"
+        validate_certs: "{{ controller_verify }}"
+        status_code: [200, 204]
+      loop: "{{ pending.json.results }}"
+      loop_control:
+        label: "{{ item.name | default('unnamed') }} (id: {{ item.id }})"
+      when: pending.json.count > 0
+
+    - name: Display result
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'Approved ' ~ pending.json.count ~ ' pending workflow node(s) — production kpatch will proceed.'
+             if pending.json.count > 0
+             else 'No pending workflow approvals found.' }}

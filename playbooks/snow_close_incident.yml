@@ -1,0 +1,29 @@
+---
+- name: Close Incident
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Resolve the Incident
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_sys_id }}"
+        state: resolved
+        close_code: >-
+          {{ 'Solved (Permanently)' if incident_outcome | default('success') == 'success'
+             else 'Not Solved (Not Reproducible)' }}
+        close_notes: |
+          CVE remediation — {{ incident_outcome | default('success') }}.
+
+          Strategy: kpatch (live kernel patching, zero downtime)
+          Hosts: rhel-dev-01/02/03, rhel-prod-01/02/03
+          {{ 'Emergency CR: ' ~ cr_number if cr_number is defined else '' }}
+          {{ 'Follow-up CR: ' ~ followup_cr_number if followup_cr_number is defined else '' }}
+
+          All affected CIs updated in CMDB with new kernel version.
+
+    - name: Display close confirmation
+      ansible.builtin.debug:
+        msg: >-
+          Incident {{ inc_number | default(inc_sys_id) }} resolved —
+          {{ incident_outcome | default('success') }}.

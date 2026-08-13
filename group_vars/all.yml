@@ -1,6 +1,4 @@
 ---
-patch_strategy: kpatch
-
 sbom_before_path: /tmp/sbom-before.json
 sbom_after_path: /tmp/sbom-after.json
 

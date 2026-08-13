@@ -1,6 +1,6 @@
 ---
 # =============================================================================
-# AAP Configuration as Code — Patching at Machine Speed
+# AAP Configuration as Code — CVE Kpatch Response
 # =============================================================================
 
 # Using the Default organization
@@ -34,6 +34,15 @@ controller_credentials:
       SN_USERNAME: "{{ servicenow_username }}"
       SN_PASSWORD: "{{ servicenow_password }}"
 
+  - name: "AAP Controller"
+    description: "Controller credential for internal workflow approval automation"
+    organization: "Default"
+    credential_type: "Red Hat Ansible Automation Platform"
+    inputs:
+      host: "{{ aap_hostname }}"
+      oauth_token: "{{ aap_token }}"
+      verify_ssl: "{{ aap_validate_certs }}"
+
 # -----------------------------------------------------------------------------
 # Projects
 # -----------------------------------------------------------------------------
@@ -51,11 +60,11 @@ controller_projects:
 # -----------------------------------------------------------------------------
 controller_inventories:
   - name: "Colombo Demo"
-    description: "Demo RHEL instances discovered dynamically from AWS EC2 tags"
+    description: "Demo RHEL instances — 3 dev + 3 prod, discovered dynamically from AWS EC2"
     organization: "Default"
 
 # -----------------------------------------------------------------------------
-# Inventory Sources (dynamic — AWS EC2)
+# Inventory Sources (dynamic — AWS EC2 with dev/prod grouping)
 # -----------------------------------------------------------------------------
 controller_inventory_sources:
   - name: "AWS EC2 Discovery"
@@ -71,8 +80,12 @@ controller_inventory_sources:
       filters:
         "tag:demo": patching
       hostnames:
-        - public-ip-address
+        - tag:Name
+      keyed_groups:
+        - key: tags.env
+          prefix: tag_env
       compose:
+        ansible_host: public_ip_address
         ansible_user: "'ec2-user'"
         ansible_become: "true"
 
@@ -100,29 +113,18 @@ controller_templates:
     credentials:
       - "Colombo Demo SSH"
 
-  - name: "Kpatch Decision"
-    description: "Decision gate: succeeds if kpatch available, fails if full update needed"
-    organization: "Default"
-    job_type: "run"
-    project: "Patching at Machine Speed"
-    playbook: "playbooks/kpatch_decision.yml"
-    inventory: "Colombo Demo"
-    credentials:
-      - "Colombo Demo SSH"
-
-  - name: "Apply Patch"
-    description: "Apply kpatch (live) or full kernel update (reboot) based on patch_strategy"
+  - name: "Apply Kpatch"
+    description: "Live kernel patch — zero downtime, zero service interruption"
     organization: "Default"
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/patch.yml"
     inventory: "Colombo Demo"
-    ask_variables_on_launch: true
     credentials:
       - "Colombo Demo SSH"
 
   - name: "Validate and Audit"
-    description: "Post-patch checks: services, SBOM diff, audit artefact"
+    description: "Post-patch: service checks, SBOM diff, CI update, audit artefact"
     organization: "Default"
     job_type: "run"
     project: "Patching at Machine Speed"
@@ -131,36 +133,37 @@ controller_templates:
     ask_variables_on_launch: true
     credentials:
       - "Colombo Demo SSH"
+      - "ServiceNow PDI"
 
-  - name: "Log Kpatch to ServiceNow"
-    description: "Create + close standard CR as audit trail (kpatch auto path)"
+  - name: "Open Incident"
+    description: "Create security Incident in ServiceNow linked to affected CIs"
     organization: "Default"
     job_type: "run"
     project: "Patching at Machine Speed"
-    playbook: "playbooks/snow_log_kpatch.yml"
-    inventory: "Demo Inventory"
+    playbook: "playbooks/snow_open_incident.yml"
+    inventory: "Colombo Demo"
     ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
 
-  - name: "Open Change Request"
-    description: "Create normal CR in ServiceNow (full update path, approval required)"
+  - name: "Open Emergency CR"
+    description: "Raise emergency CR with canary evidence, await approval for production"
     organization: "Default"
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/snow_open_cr.yml"
-    inventory: "Demo Inventory"
+    inventory: "Colombo Demo"
     ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
 
   - name: "Update CR: Implementing"
-    description: "Update CR state to Implement in ServiceNow"
+    description: "Move CR to Implement state in ServiceNow"
     organization: "Default"
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/snow_update_cr.yml"
-    inventory: "Demo Inventory"
+    inventory: "Colombo Demo"
     ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
@@ -171,10 +174,42 @@ controller_templates:
     job_type: "run"
     project: "Patching at Machine Speed"
     playbook: "playbooks/snow_close_cr.yml"
-    inventory: "Demo Inventory"
+    inventory: "Colombo Demo"
     ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
+
+  - name: "Log Follow-up CR"
+    description: "Create scheduled standard CR for follow-up full kernel update"
+    organization: "Default"
+    job_type: "run"
+    project: "Patching at Machine Speed"
+    playbook: "playbooks/snow_log_kpatch.yml"
+    inventory: "Colombo Demo"
+    ask_variables_on_launch: true
+    credentials:
+      - "ServiceNow PDI"
+
+  - name: "Close Incident"
+    description: "Resolve Incident after remediation complete"
+    organization: "Default"
+    job_type: "run"
+    project: "Patching at Machine Speed"
+    playbook: "playbooks/snow_close_incident.yml"
+    inventory: "Colombo Demo"
+    ask_variables_on_launch: true
+    credentials:
+      - "ServiceNow PDI"
+
+  - name: "Auto-approve Workflow"
+    description: "Auto-approve pending AAP workflow node (triggered by EDA on ServiceNow CR approval)"
+    organization: "Default"
+    job_type: "run"
+    project: "Patching at Machine Speed"
+    playbook: "playbooks/approve_pending_workflow.yml"
+    inventory: "Colombo Demo"
+    credentials:
+      - "AAP Controller"
 
   - name: "Reset Demo State"
     description: "Utility: remove kpatch, clean artefacts for demo replay"
@@ -187,97 +222,133 @@ controller_templates:
       - "Colombo Demo SSH"
 
 # -----------------------------------------------------------------------------
-# Workflow Templates
+# Workflow: CVE Kpatch Response
 # -----------------------------------------------------------------------------
 controller_workflows:
-  - name: "CVE Triage"
+  - name: "CVE Kpatch Response"
     description: >-
-      Phase 1: Pre-check, assess exposure, then branch —
-      kpatch (auto-remediate + audit) or full update (open CR, await approval).
+      EDA-triggered single workflow: open Incident, run canary kpatch on dev,
+      raise emergency CR for prod, await approval, kpatch prod, close ITIL records.
     organization: "Default"
     ask_variables_on_launch: true
     simplified_workflow_nodes:
-      - identifier: "Pre-check System Readiness"
+
+      # --- Phase 1: ITIL Initiation ---
+      - identifier: "Open Incident"
+        unified_job_template: "Open Incident"
+        success_nodes:
+          - "Canary: Pre-check"
+
+      # --- Phase 2: Dev Canary (fully automated) ---
+      - identifier: "Canary: Pre-check"
         unified_job_template: "Pre-check System Readiness"
+        limit: "tag_env_dev"
         success_nodes:
-          - "Assess Kernel Exposure"
+          - "Canary: Assess"
+        failure_nodes:
+          - "Close Incident (Canary Failed)"
 
-      - identifier: "Assess Kernel Exposure"
+      - identifier: "Canary: Assess"
         unified_job_template: "Assess Kernel Exposure"
+        limit: "tag_env_dev"
         success_nodes:
-          - "Kpatch Decision"
-
-      - identifier: "Kpatch Decision"
-        unified_job_template: "Kpatch Decision"
-        success_nodes:
-          - "Apply Patch (kpatch)"
+          - "Canary: Apply Kpatch"
         failure_nodes:
-          - "Open Change Request"
+          - "Close Incident (Canary Failed)"
 
-      # --- kpatch path (automated) ---
-      - identifier: "Apply Patch (kpatch)"
-        unified_job_template: "Apply Patch"
-        extra_data:
-          patch_strategy: kpatch
+      - identifier: "Canary: Apply Kpatch"
+        unified_job_template: "Apply Kpatch"
+        limit: "tag_env_dev"
         success_nodes:
-          - "Validate and Audit (kpatch)"
+          - "Canary: Validate"
         failure_nodes:
-          - "Log Kpatch to ServiceNow (failed)"
+          - "Close Incident (Canary Failed)"
 
-      - identifier: "Validate and Audit (kpatch)"
+      - identifier: "Canary: Validate"
         unified_job_template: "Validate and Audit"
+        limit: "tag_env_dev"
         success_nodes:
-          - "Log Kpatch to ServiceNow"
+          - "Open Emergency CR"
         failure_nodes:
-          - "Log Kpatch to ServiceNow (failed)"
+          - "Close Incident (Canary Failed)"
 
-      - identifier: "Log Kpatch to ServiceNow"
-        unified_job_template: "Log Kpatch to ServiceNow"
+      # --- Phase 3: Raise Emergency CR + Await Approval ---
+      - identifier: "Open Emergency CR"
+        unified_job_template: "Open Emergency CR"
+        success_nodes:
+          - "Awaiting CR Approval"
 
-      - identifier: "Log Kpatch to ServiceNow (failed)"
-        unified_job_template: "Log Kpatch to ServiceNow"
+      - identifier: "Awaiting CR Approval"
+        approval_node:
+          name: "Awaiting CR Approval"
+          description: >-
+            Workflow paused — waiting for ServiceNow emergency CR approval.
+            EDA will auto-approve this node when the CR is approved in ServiceNow.
+          timeout: 0
+        success_nodes:
+          - "Update CR: Implementing"
+        failure_nodes:
+          - "Close Incident (Denied)"
 
-      # --- full update path (governed) ---
-      - identifier: "Open Change Request"
-        unified_job_template: "Open Change Request"
-
-  - name: "CVE Remediation"
-    description: >-
-      Phase 2: Triggered by ServiceNow CR approval.
-      Update CR, apply full kernel update, validate, close CR.
-    organization: "Default"
-    ask_variables_on_launch: true
-    simplified_workflow_nodes:
+      # --- Phase 4: Production Kpatch (governed) ---
       - identifier: "Update CR: Implementing"
         unified_job_template: "Update CR: Implementing"
         success_nodes:
-          - "Apply Patch (full)"
+          - "Apply Kpatch (Prod)"
 
-      - identifier: "Apply Patch (full)"
-        unified_job_template: "Apply Patch"
-        extra_data:
-          patch_strategy: full
+      - identifier: "Apply Kpatch (Prod)"
+        unified_job_template: "Apply Kpatch"
+        limit: "tag_env_prod"
         success_nodes:
-          - "Validate and Audit"
+          - "Validate (Prod)"
         failure_nodes:
           - "Close CR: Failed"
 
-      - identifier: "Validate and Audit"
+      - identifier: "Validate (Prod)"
         unified_job_template: "Validate and Audit"
+        limit: "tag_env_prod"
         success_nodes:
           - "Close CR: Successful"
         failure_nodes:
           - "Close CR: Failed"
 
+      # --- Phase 5: ITIL Closure ---
       - identifier: "Close CR: Successful"
         unified_job_template: "Close Change Request"
         extra_data:
           cr_close_code: successful
+        success_nodes:
+          - "Log Follow-up CR"
 
       - identifier: "Close CR: Failed"
         unified_job_template: "Close Change Request"
         extra_data:
           cr_close_code: unsuccessful
+        success_nodes:
+          - "Close Incident (Failed)"
+
+      - identifier: "Log Follow-up CR"
+        unified_job_template: "Log Follow-up CR"
+        success_nodes:
+          - "Close Incident"
+
+      - identifier: "Close Incident"
+        unified_job_template: "Close Incident"
+
+      - identifier: "Close Incident (Canary Failed)"
+        unified_job_template: "Close Incident"
+        extra_data:
+          incident_outcome: "canary validation failed"
+
+      - identifier: "Close Incident (Failed)"
+        unified_job_template: "Close Incident"
+        extra_data:
+          incident_outcome: "production patching failed"
+
+      - identifier: "Close Incident (Denied)"
+        unified_job_template: "Close Incident"
+        extra_data:
+          incident_outcome: "CR approval denied"
 
 # =============================================================================
 # Event-Driven Ansible
@@ -297,7 +368,7 @@ eda_decision_environments:
 # -----------------------------------------------------------------------------
 eda_projects:
   - name: "Patching at Machine Speed"
-    description: "EDA rulebooks for CVE triage and ServiceNow-driven remediation"
+    description: "EDA rulebooks for CVE response and ServiceNow approval bridge"
     organization: "Default"
     url: "{{ git_repo_url }}"
     wait: true

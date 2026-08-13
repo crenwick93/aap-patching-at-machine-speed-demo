@@ -1,0 +1,76 @@
+---
+- name: Open Incident for CVE Response
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Look up primary CI in CMDB
+      servicenow.itsm.configuration_item_info:
+        query:
+          - name: = rhel-dev-01
+      register: ci_lookup
+
+    - name: Create security Incident
+      servicenow.itsm.incident:
+        state: new
+        impact: high
+        urgency: high
+        short_description: >-
+          Critical kernel CVE detected — {{ advisory_id | default('RHSA-2025:8741') }}
+          affecting 6 RHEL hosts
+        description: |
+          Red Hat Lightspeed detected a critical kernel security advisory.
+
+          Advisory: {{ advisory_id | default('RHSA-2025:8741') }}
+          Severity: {{ severity | default('Critical') }}
+          Synopsis: {{ synopsis | default('Important: kernel security update') }}
+          CVEs: {{ cve_list | default([]) | join(', ') }}
+
+          Affected hosts (6):
+            Dev:  rhel-dev-01, rhel-dev-02, rhel-dev-03
+            Prod: rhel-prod-01, rhel-prod-02, rhel-prod-03
+
+          Automated triage initiated by Event-Driven Ansible.
+          AAP workflow will:
+            1. Run canary kpatch on dev fleet
+            2. Validate services post-patch
+            3. Raise emergency CR for production
+            4. Await approval, then kpatch production
+            5. Update CMDB CIs with new kernel version
+        category: Software
+        subcategory: Operating System
+        caller: "{{ servicenow_caller | default('aap-svc-crenwick') }}"
+        cmdb_ci: "{{ ci_lookup.records[0].sys_id | default(omit) }}"
+      register: inc_result
+
+    - name: Add affected CIs as work note
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_result.record.sys_id }}"
+        work_notes: |
+          Affected Configuration Items:
+          Dev environment:
+          - rhel-dev-01
+          - rhel-dev-02
+          - rhel-dev-03
+          Prod environment:
+          - rhel-prod-01
+          - rhel-prod-02
+          - rhel-prod-03
+
+          Automated assessment in progress via AAP.
+
+    - name: Display Incident details
+      ansible.builtin.debug:
+        msg: |
+          === Incident Created ===
+          Number: {{ inc_result.record.number }}
+          Sys ID: {{ inc_result.record.sys_id }}
+          Priority: {{ inc_result.record.priority }}
+          Awaiting triage by AAP workflow.
+
+    - name: Publish Incident identifiers
+      ansible.builtin.set_stats:
+        data:
+          inc_sys_id: "{{ inc_result.record.sys_id }}"
+          inc_number: "{{ inc_result.record.number }}"

@@ -97,6 +97,36 @@
       ansible.builtin.debug:
         msg: "{{ audit_report }}"
 
+    - name: Update CI kernel version in ServiceNow CMDB
+      servicenow.itsm.configuration_item:
+        sys_id: "{{ ci_sys_id }}"
+        other:
+          os_version: "RHEL 9.8 — kernel {{ running_kernel.stdout }}"
+          short_description: >-
+            RHEL 9.8 demo node — patched {{ ansible_date_time.date }}
+      when: ci_sys_id is defined
+      delegate_to: localhost
+
+    - name: Look up CI by hostname (fallback)
+      servicenow.itsm.configuration_item_info:
+        query:
+          - name: = {{ inventory_hostname_short | default(inventory_hostname) }}
+      register: ci_by_name
+      when: ci_sys_id is not defined
+      delegate_to: localhost
+
+    - name: Update CI kernel version by name lookup
+      servicenow.itsm.configuration_item:
+        sys_id: "{{ ci_by_name.records[0].sys_id }}"
+        other:
+          os_version: "RHEL 9.8 — kernel {{ running_kernel.stdout }}"
+          short_description: >-
+            RHEL 9.8 demo node — patched {{ ansible_date_time.date }}
+      when:
+        - ci_sys_id is not defined
+        - ci_by_name.records | default([]) | length > 0
+      delegate_to: localhost
+
     - name: Publish validation data
       ansible.builtin.set_stats:
         data:
@@ -104,3 +134,4 @@
           services_healthy: true
           sbom_diff_summary: "{{ sbom_diff | default({}) }}"
           validation_timestamp: "{{ ansible_date_time.iso8601 }}"
+          strategy_used: "{{ strategy_used | default('kpatch') }}"

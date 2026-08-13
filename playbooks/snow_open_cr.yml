@@ -1,47 +1,77 @@
 ---
-- name: Open Change Request
+- name: Raise Emergency Change Request
   hosts: localhost
   connection: local
   gather_facts: false
 
   tasks:
-    - name: Create normal Change Request
+    - name: Create emergency Change Request with canary evidence
       servicenow.itsm.change_request:
-        type: normal
+        type: emergency
         state: new
         short_description: >-
-          Kernel advisory response — {{ advisory_count | default('N/A') }} security advisories,
-          {{ cve_list | default([]) | length }} CVEs on {{ kernel_version | default('unknown') }}
+          Emergency kpatch — {{ advisory_id | default('RHSA-2025:8741') }}
+          ({{ cves_patched | default([]) | length }} CVEs) — production fleet
         description: |
-          Automated triage by AAP Patching at Machine Speed workflow.
+          Emergency Change Request for production kpatch deployment.
 
-          Assessment Summary:
-          - Kernel: {{ kernel_version | default('unknown') }}
-          - Security advisories: {{ advisory_count | default('N/A') }}
-          - Kernel CVEs: {{ cve_list | default([]) | join(', ') }}
-          - Kpatch eligible: {{ kpatch_eligible | default('N/A') }}
-          - SBOM captured: {{ sbom_before_path | default('/tmp/sbom-before.json') }}
+          Advisory: {{ advisory_id | default('RHSA-2025:8741') }}
+          Severity: {{ severity | default('Critical') }}
+          Kernel: {{ kernel_version | default('unknown') }}
+          CVEs: {{ cve_list | default([]) | join(', ') }}
+          Related Incident: {{ inc_number | default('N/A') }}
 
-          Pre-check Summary:
-          {{ precheck_summary | default({}) | to_nice_yaml }}
+          ══════════════════════════════════════════════════════
+          CANARY DEPLOYMENT EVIDENCE (Dev Environment)
+          ══════════════════════════════════════════════════════
 
-          Recommended action: Full kernel update (kpatch not available).
-          Approval required before remediation proceeds.
-        priority: 2
-        risk: moderate
+          Dev hosts patched: rhel-dev-01, rhel-dev-02, rhel-dev-03
+          Patch strategy: kpatch (live, zero downtime)
+          CVEs remediated: {{ cves_patched | default([]) | join(', ') }}
+          Services healthy post-patch: {{ services_healthy | default('yes') }}
+          SBOM diff: {{ sbom_diff_summary.changed | default({}) | length }} RPMs changed
+
+          {{ audit_report | default('') }}
+
+          ══════════════════════════════════════════════════════
+          PRODUCTION HOSTS PENDING APPROVAL
+          ══════════════════════════════════════════════════════
+
+          - rhel-prod-01
+          - rhel-prod-02
+          - rhel-prod-03
+
+          Identical kpatch will be applied to production upon approval.
+          Zero downtime expected — live kernel patching, no reboot.
+
+          Requesting emergency approval to proceed.
+        priority: 1
+        risk: low
         impact: 2
         category: Software
         assignment_group: "CAB Approval"
+        other:
+          parent: "{{ inc_sys_id | default(omit) }}"
       register: cr_result
+
+    - name: Update Incident with CR reference
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_sys_id }}"
+        work_notes: >-
+          Emergency CR {{ cr_result.record.number }} raised for production kpatch.
+          Canary deployment to dev completed successfully.
+          Awaiting CAB approval before production remediation proceeds.
+      when: inc_sys_id is defined
 
     - name: Display CR details
       ansible.builtin.debug:
         msg: |
-          === Change Request Created ===
+          === Emergency Change Request Created ===
           Number: {{ cr_result.record.number }}
           Sys ID: {{ cr_result.record.sys_id }}
-          State: {{ cr_result.record.state }}
-          Awaiting approval in ServiceNow.
+          Linked to Incident: {{ inc_number | default('N/A') }}
+          Dev canary: PASSED
+          Awaiting approval for production kpatch.
 
     - name: Publish CR identifiers
       ansible.builtin.set_stats:

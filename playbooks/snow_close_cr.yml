@@ -13,7 +13,7 @@
         close_notes: |
           Patching completed — {{ cr_close_code }}.
 
-          Strategy: {{ strategy_used | default('full') }}
+          Strategy: {{ strategy_used | default('kpatch') }}
           CVEs patched: {{ cves_patched | default([]) | join(', ') }}
           Services healthy: {{ services_healthy | default('unknown') }}
 
