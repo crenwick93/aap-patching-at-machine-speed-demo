@@ -8,10 +8,22 @@
         port: 5000
   rules:
     - name: Critical CVE detected on Trading Platform host
-      condition: event.meta is defined
+      condition: event.payload.payload.application is defined and event.payload.payload.application == "vulnerability"
+      throttle:
+        once_within: 5 minutes
+        group_by_attributes:
+          - event.payload.payload.advisory_id
       action:
-        debug:
-          msg: "{{ event }}"
+        run_workflow_template:
+          name: "CVE Kpatch Response"
+          organization: Default
+          job_args:
+            extra_vars:
+              affected_host: "{{ event.payload.payload.context.display_name }}"
+              triggered_cve: "{{ event.payload.payload.events[0].payload.reported_cve }}"
+              cve_list: "{{ event.payload.payload.events | map(attribute='payload.reported_cve') | list }}"
+              severity: "Critical"
+              advisory_id: "{{ event.payload.payload.advisory_id }}"
 
 - name: ServiceNow CR Approval Bridge
   hosts: all
