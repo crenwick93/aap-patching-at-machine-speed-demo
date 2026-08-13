@@ -15,6 +15,13 @@
         that: cr_number is defined
         fail_msg: "cr_number must be provided to match the correct workflow approval"
 
+    - name: Extract advisory ID from CR short description
+      ansible.builtin.set_fact:
+        cr_advisory_id: >-
+          {{ cr_short_description | default('')
+             | regex_search('(RHSA-\d{4}:\d+)')
+             | default(cr_short_description | default(''), true) }}
+
     - name: Find pending workflow approvals
       ansible.builtin.uri:
         url: "{{ controller_url }}/api/controller/v2/workflow_approvals/?status=pending"
@@ -24,15 +31,31 @@
         return_content: true
       register: pending
 
-    - name: Identify the approval from the CVE Kpatch Response workflow
-      ansible.builtin.set_fact:
-        matching_approval_id: "{{ item.id }}"
+    - name: Get parent workflow details for each pending approval
+      ansible.builtin.uri:
+        url: "{{ controller_url }}/api/controller/v2/workflow_jobs/{{ item.summary_fields.workflow_job.id }}/"
+        headers:
+          Authorization: "Bearer {{ controller_token }}"
+        validate_certs: "{{ controller_verify }}"
+        return_content: true
       loop: "{{ pending.json.results }}"
       loop_control:
         label: "approval {{ item.id }} ({{ item.summary_fields.workflow_job.name | default('?') }})"
+      register: parent_workflows
+      when: pending.json.count > 0
+
+    - name: Match approval to workflow by advisory ID
+      ansible.builtin.set_fact:
+        matching_approval_id: "{{ item.item.id }}"
+        matching_workflow_id: "{{ item.item.summary_fields.workflow_job.id }}"
+      loop: "{{ parent_workflows.results | default([]) }}"
+      loop_control:
+        label: "workflow {{ item.item.summary_fields.workflow_job.id | default('?') }}"
       when:
-        - item.summary_fields.workflow_job is defined
-        - item.summary_fields.workflow_job.name == "CVE Kpatch Response"
+        - item.json is defined
+        - item.item.summary_fields.workflow_job.name == "CVE Kpatch Response"
+        - cr_advisory_id | length > 0
+        - cr_advisory_id in (item.json.extra_vars | default('') | string)
 
     - name: Approve the matching workflow node
       ansible.builtin.uri:

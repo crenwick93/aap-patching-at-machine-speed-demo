@@ -53,3 +53,4 @@
             extra_vars:
               cr_number: "{{ event.number }}"
               cr_sys_id: "{{ event.sys_id }}"
+              cr_short_description: "{{ event.short_description }}"

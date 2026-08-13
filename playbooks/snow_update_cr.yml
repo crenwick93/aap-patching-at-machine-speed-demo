@@ -5,6 +5,11 @@
   gather_facts: false
 
   tasks:
+    - name: Get current CR state
+      servicenow.itsm.change_request_info:
+        sys_id: "{{ cr_sys_id }}"
+      register: cr_current
+
     - name: Update Change Request state to Implement
       servicenow.itsm.change_request:
         sys_id: "{{ cr_sys_id }}"
@@ -12,9 +17,19 @@
         other:
           work_notes: |
             Remediation workflow triggered by EDA.
-            CR approved in ServiceNow — proceeding with patching.
+            CR approved in ServiceNow — proceeding with production patching.
             Timestamp: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
+      when: cr_current.records[0].state | default('') != 'implement'
+
+    - name: Add work note if CR already in Implement
+      servicenow.itsm.change_request:
+        sys_id: "{{ cr_sys_id }}"
+        other:
+          work_notes: |
+            AAP workflow resumed — proceeding with production patching.
+            Timestamp: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
+      when: cr_current.records[0].state | default('') == 'implement'
 
     - name: Display update confirmation
       ansible.builtin.debug:
-        msg: "CR {{ cr_number | default(cr_sys_id) }} moved to Implement state."
+        msg: "CR {{ cr_number | default(cr_sys_id) }} — proceeding with production patching (state: {{ cr_current.records[0].state | default('unknown') }})."
