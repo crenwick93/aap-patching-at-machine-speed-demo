@@ -299,19 +299,17 @@ controller_workflows:
           - "Close CR: Successful"
 
       # --- Phase 5: ITIL Closure ---
-      - identifier: "Close CR: Successful"
+      - identifier: "CR: Ready for Review"
         unified_job_template: "Close Change Request"
-        extra_data:
-          cr_close_code: successful
         success_nodes:
           - "Log Follow-up CR"
 
       - identifier: "Log Follow-up CR"
         unified_job_template: "Log Follow-up CR"
         success_nodes:
-          - "Close Incident"
+          - "Resolve Incident"
 
-      - identifier: "Close Incident"
+      - identifier: "Resolve Incident"
         unified_job_template: "Close Incident"
 
 # =============================================================================
