@@ -65,3 +65,26 @@
       loop: "{{ _event_streams_response.json.results }}"
       loop_control:
         label: "{{ item.name }}"
+
+    - name: Look up rulebook activations
+      ansible.builtin.uri:
+        url: "{{ aap_hostname }}/api/eda/v1/activations/"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ aap_token }}"
+        validate_certs: "{{ aap_validate_certs }}"
+        status_code: [200]
+      register: _activations_response
+
+    - name: Enable disabled rulebook activations
+      ansible.builtin.uri:
+        url: "{{ aap_hostname }}/api/eda/v1/activations/{{ item.id }}/enable/"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ aap_token }}"
+        validate_certs: "{{ aap_validate_certs }}"
+        status_code: [204, 200, 409]
+      loop: "{{ _activations_response.json.results }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: not item.is_enabled | default(true)
