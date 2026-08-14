@@ -250,31 +250,23 @@ controller_workflows:
         unified_job_template: "Pre-check System Readiness"
         success_nodes:
           - "Assess All Hosts"
-        failure_nodes:
-          - "Close Incident (Canary Failed)"
 
       - identifier: "Assess All Hosts"
         unified_job_template: "Assess Kernel Exposure"
         success_nodes:
           - "Canary: Apply Kpatch"
-        failure_nodes:
-          - "Close Incident (Canary Failed)"
 
       - identifier: "Canary: Apply Kpatch"
         unified_job_template: "Apply Kpatch"
         limit: "tag_env_dev"
         success_nodes:
           - "Canary: Validate"
-        failure_nodes:
-          - "Close Incident (Canary Failed)"
 
       - identifier: "Canary: Validate"
         unified_job_template: "Validate and Audit"
         limit: "tag_env_dev"
         success_nodes:
           - "Open Emergency CR"
-        failure_nodes:
-          - "Close Incident (Canary Failed)"
 
       # --- Phase 3: Raise Emergency CR + Await Approval ---
       - identifier: "Open Emergency CR"
@@ -291,8 +283,6 @@ controller_workflows:
           timeout: 0
         success_nodes:
           - "Update CR: Implementing"
-        failure_nodes:
-          - "Close Incident (Denied)"
 
       # --- Phase 4: Production Kpatch (governed) ---
       - identifier: "Update CR: Implementing"
@@ -305,16 +295,12 @@ controller_workflows:
         limit: "tag_env_prod"
         success_nodes:
           - "Validate (Prod)"
-        failure_nodes:
-          - "Close CR: Failed"
 
       - identifier: "Validate (Prod)"
         unified_job_template: "Validate and Audit"
         limit: "tag_env_prod"
         success_nodes:
           - "Close CR: Successful"
-        failure_nodes:
-          - "Close CR: Failed"
 
       # --- Phase 5: ITIL Closure ---
       - identifier: "Close CR: Successful"
@@ -324,13 +310,6 @@ controller_workflows:
         success_nodes:
           - "Log Follow-up CR"
 
-      - identifier: "Close CR: Failed"
-        unified_job_template: "Close Change Request"
-        extra_data:
-          cr_close_code: unsuccessful
-        success_nodes:
-          - "Close Incident (Failed)"
-
       - identifier: "Log Follow-up CR"
         unified_job_template: "Log Follow-up CR"
         success_nodes:
@@ -338,21 +317,6 @@ controller_workflows:
 
       - identifier: "Close Incident"
         unified_job_template: "Close Incident"
-
-      - identifier: "Close Incident (Canary Failed)"
-        unified_job_template: "Close Incident"
-        extra_data:
-          incident_outcome: "canary validation failed"
-
-      - identifier: "Close Incident (Failed)"
-        unified_job_template: "Close Incident"
-        extra_data:
-          incident_outcome: "production patching failed"
-
-      - identifier: "Close Incident (Denied)"
-        unified_job_template: "Close Incident"
-        extra_data:
-          incident_outcome: "CR approval denied"
 
 # =============================================================================
 # Event-Driven Ansible
