@@ -25,38 +25,20 @@
           Emergency kpatch — {{ advisory_id | default('RHSA-2026:25217') }}
           ({{ cves_patched | default([]) | length }} CVEs) — production fleet
         description: |
-          Emergency Change Request for production kpatch deployment.
+          Red Hat Insights has detected a critical kernel vulnerability
+          ({{ advisory_id | default('RHSA-2026:25217') }}) affecting the
+          Trading Platform production fleet.
+
+          A canary deployment has been successfully completed across the
+          dev environment with zero service impact. This CR requests
+          approval to apply the identical kpatch to production.
 
           Advisory: {{ advisory_id | default('RHSA-2026:25217') }}
           Severity: {{ severity | default('Critical') }}
           Kernel: {{ kernel_version | default('unknown') }}
           CVEs: {{ cve_list | default([]) | join(', ') }}
-          Related Incident: {{ inc_number | default('N/A') }}
-
-          ══════════════════════════════════════════════════════
-          CANARY DEPLOYMENT EVIDENCE (Dev Environment)
-          ══════════════════════════════════════════════════════
-
-          Dev hosts patched: rhel-dev-01.trading-demo.chrislab.dev, rhel-dev-02.trading-demo.chrislab.dev, rhel-dev-03.trading-demo.chrislab.dev
-          Patch strategy: kpatch (live, zero downtime)
-          CVEs remediated: {{ cves_patched | default([]) | join(', ') }}
-          Services healthy post-patch: {{ services_healthy | default('yes') }}
-          SBOM diff: {{ sbom_diff_summary.changed | default({}) | length }} RPMs changed
-
-          {{ audit_report | default('') }}
-
-          ══════════════════════════════════════════════════════
-          PRODUCTION HOSTS PENDING APPROVAL
-          ══════════════════════════════════════════════════════
-
-          - rhel-prod-01.trading-demo.chrislab.dev
-          - rhel-prod-02.trading-demo.chrislab.dev
-          - rhel-prod-03.trading-demo.chrislab.dev
-
-          Identical kpatch will be applied to production upon approval.
-          Zero downtime expected — live kernel patching, no reboot.
-
-          Requesting emergency approval to proceed.
+          Related Dev Incident: {{ inc_dev_number | default('N/A') }}
+          Related Prod Incident: {{ inc_prod_number | default('N/A') }}
         priority: 1
         risk: low
         impact: 2
@@ -66,6 +48,49 @@
           parent: "{{ inc_prod_sys_id | default(inc_sys_id) | default(omit) }}"
           cmdb_ci: "{{ app_prod_lookup.records[0].sys_id | default(omit) }}"
           business_service: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
+          justification: |
+            Red Hat Insights has identified {{ advisory_id | default('RHSA-2026:25217') }}
+            as a critical kernel vulnerability (CVSS 8.8) affecting all Trading Platform
+            nodes. The vulnerability allows remote exploitation and must be remediated
+            immediately to maintain the security posture of the platform.
+
+            A canary kpatch was successfully deployed to the dev environment:
+            - Dev hosts patched: rhel-dev-01, rhel-dev-02, rhel-dev-03
+            - Strategy: kpatch (live kernel patching, zero downtime)
+            - Services healthy post-patch: {{ services_healthy | default('yes') }}
+            - Trading Platform service: UP across all dev nodes
+            - SBOM diff: {{ sbom_diff_summary.changed | default({}) | length }} RPMs changed
+
+            {{ audit_report | default('') }}
+          implementation_plan: |
+            1. Apply kpatch to production nodes (rhel-prod-01, rhel-prod-02, rhel-prod-03)
+               using Ansible Automation Platform — live kernel patching, zero reboot.
+            2. Run post-checks: verify kpatch loaded, critical services healthy,
+               Trading Platform service responding on all production nodes.
+            3. Generate post-patch SBOM and compute diff against baseline.
+            4. Update CMDB Configuration Items with new kernel patch level.
+            5. Force Red Hat Insights check-in to confirm CVE remediation.
+            6. Resolve production incident and move this CR to Review.
+
+            Estimated duration: < 5 minutes
+            Service impact: None (live kernel patching)
+          backout_plan: |
+            If post-checks fail on any production node:
+            1. Unload kpatch module: sudo kpatch unload --all
+            2. Verify services recover to healthy state.
+            3. Escalate to platform engineering for manual investigation.
+
+            Note: kpatch unload restores the original kernel behaviour without
+            requiring a reboot. No data loss or service restart is expected.
+          test_plan: |
+            Automated post-checks will verify:
+            1. kpatch module is loaded and active on each production node.
+            2. Critical services (sshd, chronyd) are running.
+            3. Trading Platform service health endpoint responds on each node.
+            4. Post-patch SBOM is generated and diffed against pre-patch baseline.
+            5. Red Hat Insights check-in confirms updated system state.
+
+            All checks must pass before the CR is moved to Review.
       register: cr_result
 
     - name: Progress CR to Authorize and request approval
