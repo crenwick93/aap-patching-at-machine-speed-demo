@@ -153,4 +153,68 @@
           sbom_diff_summary: "{{ sbom_diff | default({}) }}"
           validation_timestamp: "{{ ansible_date_time.iso8601 }}"
           strategy_used: "{{ strategy_used | default('kpatch') }}"
+          cves_patched: "{{ cve_list | default([]) }}"
         aggregate: false
+
+- name: Update Incident with validation results
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Build validation work note
+      ansible.builtin.set_fact:
+        validation_work_note: |
+          [AUTOMATED] Patch Validation Complete
+
+          {% for host in groups['all'] %}
+          {% set hv = hostvars[host] %}
+          {{ hv.audit_report | default('No report for ' ~ host) }}
+          {% endfor %}
+
+    - name: Determine which incident to update
+      ansible.builtin.set_fact:
+        target_inc_sys_id: >-
+          {{ inc_dev_sys_id if (groups['tag_env_dev'] | default([]) | intersect(groups['all']) | length > 0
+             and groups['tag_env_prod'] | default([]) | intersect(groups['all']) | length == 0)
+             else inc_prod_sys_id | default('') }}
+        target_inc_number: >-
+          {{ inc_dev_number if (groups['tag_env_dev'] | default([]) | intersect(groups['all']) | length > 0
+             and groups['tag_env_prod'] | default([]) | intersect(groups['all']) | length == 0)
+             else inc_prod_number | default('') }}
+        is_dev_validate: >-
+          {{ (groups['tag_env_dev'] | default([]) | intersect(groups['all']) | length > 0
+             and groups['tag_env_prod'] | default([]) | intersect(groups['all']) | length == 0) | bool }}
+
+    - name: Update incident with validation work notes
+      servicenow.itsm.incident:
+        sys_id: "{{ target_inc_sys_id | trim }}"
+        other:
+          work_notes: "{{ validation_work_note }}"
+      when: target_inc_sys_id | trim | length > 0
+
+    - name: Resolve Dev incident after successful canary
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_dev_sys_id | trim }}"
+        state: resolved
+        close_code: "Solved (Permanently)"
+        close_notes: >-
+          Dev canary kpatch validated successfully. All dev services healthy.
+          Proceeding with production deployment via emergency CR.
+      when:
+        - is_dev_validate | bool
+        - inc_dev_sys_id is defined
+        - inc_dev_sys_id | trim | length > 0
+
+    - name: Resolve Prod incident after successful production patching
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_prod_sys_id | trim }}"
+        state: resolved
+        close_code: "Solved (Permanently)"
+        close_notes: >-
+          Production kpatch validated successfully. All production services healthy.
+          CIs updated in CMDB. Emergency CR moved to Review for human sign-off.
+      when:
+        - not (is_dev_validate | bool)
+        - inc_prod_sys_id is defined
+        - inc_prod_sys_id | trim | length > 0

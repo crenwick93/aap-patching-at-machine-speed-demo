@@ -115,6 +115,7 @@ controller_templates:
     ask_limit_on_launch: true
     credentials:
       - "Demo SSH Key"
+      - "ServiceNow PDI"
 
   - name: "Apply Kpatch"
     description: "Live kernel patch — zero downtime, zero service interruption"
@@ -162,45 +163,12 @@ controller_templates:
     credentials:
       - "ServiceNow PDI"
 
-  - name: "Update CR: Implementing"
-    description: "Move CR to Implement state in ServiceNow"
+  - name: "Close Out"
+    description: "CR to Review + log follow-up CR for full kernel update"
     organization: "Default"
     job_type: "run"
     project: "Patching at Machine Speed"
-    playbook: "playbooks/snow_update_cr.yml"
-    inventory: "Patching Demo"
-    ask_variables_on_launch: true
-    credentials:
-      - "ServiceNow PDI"
-
-  - name: "Close Change Request"
-    description: "Close CR with outcome, SBOM diff, and audit summary"
-    organization: "Default"
-    job_type: "run"
-    project: "Patching at Machine Speed"
-    playbook: "playbooks/snow_close_cr.yml"
-    inventory: "Patching Demo"
-    ask_variables_on_launch: true
-    credentials:
-      - "ServiceNow PDI"
-
-  - name: "Log Follow-up CR"
-    description: "Create scheduled standard CR for follow-up full kernel update"
-    organization: "Default"
-    job_type: "run"
-    project: "Patching at Machine Speed"
-    playbook: "playbooks/snow_log_kpatch.yml"
-    inventory: "Patching Demo"
-    ask_variables_on_launch: true
-    credentials:
-      - "ServiceNow PDI"
-
-  - name: "Close Incident"
-    description: "Resolve Incident after remediation complete"
-    organization: "Default"
-    job_type: "run"
-    project: "Patching at Machine Speed"
-    playbook: "playbooks/snow_close_incident.yml"
+    playbook: "playbooks/snow_close_out.yml"
     inventory: "Patching Demo"
     ask_variables_on_launch: true
     credentials:
@@ -243,32 +211,33 @@ controller_workflows:
       - identifier: "Open Incident"
         unified_job_template: "Open Incident"
         success_nodes:
+          - "Assess & SBOM Baseline"
+
+      # --- Phase 1: Assessment ---
+      - identifier: "Assess & SBOM Baseline"
+        unified_job_template: "Assess Kernel Exposure"
+        success_nodes:
           - "Pre-check All Hosts"
 
-      # --- Phase 2: Dev Canary (fully automated) ---
       - identifier: "Pre-check All Hosts"
         unified_job_template: "Pre-check System Readiness"
         success_nodes:
-          - "Assess All Hosts"
-
-      - identifier: "Assess All Hosts"
-        unified_job_template: "Assess Kernel Exposure"
-        success_nodes:
           - "Canary: Apply Kpatch"
 
+      # --- Phase 2: Dev Canary ---
       - identifier: "Canary: Apply Kpatch"
         unified_job_template: "Apply Kpatch"
         limit: "tag_env_dev"
         success_nodes:
-          - "Canary: Validate"
+          - "Canary: Validate & Audit"
 
-      - identifier: "Canary: Validate"
+      - identifier: "Canary: Validate & Audit"
         unified_job_template: "Validate and Audit"
         limit: "tag_env_dev"
         success_nodes:
           - "Open Emergency CR"
 
-      # --- Phase 3: Raise Emergency CR + Await Approval ---
+      # --- Phase 3: Governed Production Deployment ---
       - identifier: "Open Emergency CR"
         unified_job_template: "Open Emergency CR"
         success_nodes:
@@ -284,33 +253,21 @@ controller_workflows:
         success_nodes:
           - "Apply Kpatch (Prod)"
 
-      # --- Phase 4: Production Kpatch (governed) ---
-
       - identifier: "Apply Kpatch (Prod)"
         unified_job_template: "Apply Kpatch"
         limit: "tag_env_prod"
         success_nodes:
-          - "Validate (Prod)"
+          - "Validate & Audit (Prod)"
 
-      - identifier: "Validate (Prod)"
+      - identifier: "Validate & Audit (Prod)"
         unified_job_template: "Validate and Audit"
         limit: "tag_env_prod"
         success_nodes:
-          - "Close CR: Successful"
+          - "Close Out"
 
-      # --- Phase 5: ITIL Closure ---
-      - identifier: "CR: Ready for Review"
-        unified_job_template: "Close Change Request"
-        success_nodes:
-          - "Log Follow-up CR"
-
-      - identifier: "Log Follow-up CR"
-        unified_job_template: "Log Follow-up CR"
-        success_nodes:
-          - "Resolve Incident"
-
-      - identifier: "Resolve Incident"
-        unified_job_template: "Close Incident"
+      # --- Phase 4: ITIL Close Out ---
+      - identifier: "Close Out"
+        unified_job_template: "Close Out"
 
 # =============================================================================
 # Event-Driven Ansible

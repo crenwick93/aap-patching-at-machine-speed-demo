@@ -103,9 +103,9 @@
           assessment_timestamp: "{{ ansible_date_time.iso8601 }}"
         aggregate: false
 
-    - name: Display assessment summary
-      ansible.builtin.debug:
-        msg: |
+    - name: Build assessment summary
+      ansible.builtin.set_fact:
+        assessment_summary: |
           === Kernel Exposure Assessment ===
           Host: {{ inventory_hostname }}
           Kernel: {{ kernel_version }}
@@ -114,3 +114,46 @@
           Kpatch eligible: {{ kpatch_eligible }}
           Triggered CVE: {{ triggered_cve | default('N/A') }} — {{ 'PRESENT' if (triggered_cve_present | default(false) | bool) else 'not found' }}
           SBOM captured: {{ sbom_before_path | default('/tmp/sbom-before.json') }}
+
+    - name: Display assessment summary
+      ansible.builtin.debug:
+        msg: "{{ assessment_summary }}"
+
+- name: Update Incidents with assessment findings
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Build consolidated assessment report
+      ansible.builtin.set_fact:
+        assessment_work_note: |
+          [AUTOMATED] Kernel Exposure Assessment Complete
+
+          {% for host in groups['all'] %}
+          {% set hv = hostvars[host] %}
+          {{ host }}:
+            Kernel: {{ hv.kernel_version | default('unknown') }}
+            Kpatch eligible: {{ hv.kpatch_eligible | default('unknown') }}
+            Kernel CVEs: {{ hv.cve_list | default([]) | length }}
+            Triggered CVE present: {{ hv.triggered_cve_present | default('N/A') }}
+          {% endfor %}
+
+          Pre-patch SBOM captured on all hosts.
+          Proceeding with dev canary deployment.
+
+    - name: Update Dev Incident with assessment
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_dev_sys_id }}"
+        state: 2
+        other:
+          work_notes: "{{ assessment_work_note }}"
+      when: inc_dev_sys_id is defined and inc_dev_sys_id | length > 0
+
+    - name: Update Prod Incident with assessment
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_prod_sys_id }}"
+        state: 2
+        other:
+          work_notes: "{{ assessment_work_note }}"
+      when: inc_prod_sys_id is defined and inc_prod_sys_id | length > 0
