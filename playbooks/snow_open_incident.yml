@@ -51,7 +51,7 @@
 
           Automated triage initiated by Event-Driven Ansible.
           Dev environment will be patched first as a canary deployment.
-        caller: "{{ servicenow_caller | default('aap-svc-crenwick') }}"
+        caller: "{{ servicenow_caller | default('admin') }}"
         other:
           category: Software
           subcategory: Operating System
@@ -85,7 +85,7 @@
           Automated triage initiated by Event-Driven Ansible.
           Production will only be patched after dev canary succeeds
           and an emergency Change Request is approved.
-        caller: "{{ servicenow_caller | default('aap-svc-crenwick') }}"
+        caller: "{{ servicenow_caller | default('admin') }}"
         other:
           category: Software
           subcategory: Operating System
