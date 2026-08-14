@@ -38,3 +38,29 @@
     - vars.yml
   roles:
     - role: infra.aap_configuration.dispatch
+
+  post_tasks:
+    - name: Look up event streams
+      ansible.builtin.uri:
+        url: "{{ aap_hostname }}/api/eda/v1/event-streams/"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ aap_token }}"
+        validate_certs: "{{ aap_validate_certs }}"
+        status_code: [200]
+      register: _event_streams_response
+
+    - name: Ensure event streams are in production mode
+      ansible.builtin.uri:
+        url: "{{ aap_hostname }}/api/eda/v1/event-streams/{{ item.id }}/"
+        method: PATCH
+        headers:
+          Authorization: "Bearer {{ aap_token }}"
+        body_format: json
+        body:
+          test_mode: false
+        validate_certs: "{{ aap_validate_certs }}"
+        status_code: [200]
+      loop: "{{ _event_streams_response.json.results }}"
+      loop_control:
+        label: "{{ item.name }}"
