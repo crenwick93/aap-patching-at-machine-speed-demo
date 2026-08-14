@@ -75,11 +75,42 @@ sudo kpatch list
 
 ---
 
-## Act 2: The Event
+## Act 2: The Automation — What's About to Happen
 
-**Narrative:** "In a real environment, Insights would fire an event the moment a new critical CVE is detected. We're going to simulate that."
+**Narrative:** Before triggering anything, walk the audience through the automation that's waiting to respond.
 
-### 2.1 — Simulate the CVE event
+### 2.1 — Show Event-Driven Ansible
+
+- Switch to **AAP — Event-Driven Ansible > Rulebook Activations**
+  - Show the running activation — "This is listening 24/7 for events from Red Hat Insights. The moment a critical CVE is detected on any of our Trading Service nodes, it fires."
+  - Click into the rulebook to show the rules:
+    - "Rule one: when Insights reports a new CVE, it triggers the full response workflow automatically."
+    - "Rule two: it's also polling ServiceNow. When a Change Request is approved, it bridges that approval back into AAP to resume the production deployment."
+
+### 2.2 — Walk through the Workflow
+
+- Switch to **AAP — Templates > Trading Service: CVE Kpatch Response**
+  - Open the **Visualizer**
+  - Walk through the 10 nodes left to right:
+    1. **Assess & SBOM Baseline** — "First, we scan every node. Kernel version, outstanding CVEs, kpatch eligibility, and capture a Software Bill of Materials. We need to know what we're dealing with."
+    2. **Open Incident** — "Only after assessment do we raise ServiceNow incidents — one for Dev, one for Prod — with the actual findings baked in."
+    3. **Pre-check All Hosts** — "Safety checks. Disk space, memory, critical services running. Make sure it's safe to patch."
+    4. **Canary: Apply Kpatch** — "Dev goes first. Live kernel patch — no reboot required."
+    5. **Canary: Post-checks** — "Validate the dev canary worked. Kpatch loaded, services still running, SBOM diff captured."
+    6. **Open Emergency CR** — "Dev succeeded, so now we raise an emergency Change Request for production. Full ITIL justification, implementation plan, backout plan."
+    7. **Awaiting CR Approval** — "The workflow pauses here. It will not touch production until a human approves the CR in ServiceNow."
+    8. **Apply Kpatch (Prod)** — "Once approved, production gets the same live patch."
+    9. **Post-checks (Prod)** — "Same validation on production nodes."
+    10. **Post-Implementation Review** — "Close out the ITIL records — resolve both incidents, move the CR to review, and schedule a follow-up for the full kernel update."
+  - "So the key thing here — dev is fully automated, zero human touch. Production has a governance gate. The human only needs to make one decision: approve or reject the Change Request."
+
+---
+
+## Act 3: The Event
+
+**Narrative:** "Now let's trigger it. In a real environment, Insights would fire an event the moment a new critical CVE is detected. We're going to simulate that."
+
+### 3.1 — Simulate the CVE event
 
 - Switch to the **local terminal**
 
@@ -92,25 +123,25 @@ sudo kpatch list
   - "Insights has sent this event to Event-Driven Ansible"
   - "EDA is now going to trigger our entire response workflow — no human intervention needed to start the process"
 
-### 2.2 — Show the workflow kick off
+### 3.2 — Show the workflow kick off
 
 - Switch to **AAP — Workflow Jobs**
   - A new "Trading Service: CVE Kpatch Response" workflow should appear within seconds
   - Click into it to show the **Visualizer**
-  - "10 nodes in this workflow — assessment, pre-checks, dev canary, governed production deployment, and full ITIL audit trail. All automated."
+  - "You can see it's already executing the same 10-node workflow we just walked through."
 
 ---
 
-## Act 3: The Automated Response
+## Act 4: The Automated Response
 
 **Narrative:** Walk through each phase as it executes. The workflow takes a few minutes — use the time to explain what each step is doing.
 
-### 3.1 — Assess & SBOM Baseline
+### 4.1 — Assess & SBOM Baseline
 
-- The first node is "Assess & SBOM Baseline" — watch it run in the **Workflow Visualizer**
-- "Before anything else, it scans every node — kernel version, outstanding CVEs, kpatch eligibility, and captures a Software Bill of Materials. We need to know what we're dealing with before raising any tickets."
+- Watch "Assess & SBOM Baseline" complete in the **Workflow Visualizer**
+- "It's already scanned all 6 nodes and captured the baseline. Now it knows exactly what's exposed."
 
-### 3.2 — Open Incident
+### 4.2 — Open Incident
 
 - As soon as "Open Incident" completes, switch to **ServiceNow**
 - Show the **Dev service** — a new Incident has appeared
@@ -120,31 +151,31 @@ sudo kpatch list
 - Once complete, go to **ServiceNow** and check the dev incident's **Work Notes**
   - "See? The automation has written the assessment findings directly into the incident. Every node, kernel version, CVE count — full transparency."
 
-### 3.3 — Pre-checks & Dev Canary
+### 4.3 — Pre-checks & Dev Canary
 
 - "Pre-checks confirm it's safe to patch — disk space, memory, services all healthy."
 - "Now watch — it's applying the kpatch to dev first. This is our canary deployment. Zero downtime, the kernel is patched live."
 - After "Canary: Post-checks" completes:
-  - "Post-checks confirmed: kpatch loaded, all services healthy, Trading Service service is UP. SBOM diff captured — we know exactly what changed."
+  - "Post-checks confirmed: kpatch loaded, all services healthy, Trading Service is UP. SBOM diff captured — we know exactly what changed."
 
-### 3.4 — Open Emergency CR + Approval
+### 4.4 — Open Emergency CR + Approval
 
 - The workflow reaches **"Open Emergency CR"** then pauses at **"Awaiting CR Approval"**
 - Switch to **ServiceNow**
   - Show the new **Change Request** — it's an emergency CR
   - "The automation has raised a governed change request. Dev canary passed, but production needs human approval. This is the governance gate."
-  - Show the CR details — linked to the Trading Service service, canary evidence in the description
+  - Show the CR details — linked to the Trading Service, canary evidence in the description
 - **Approve the CR** in ServiceNow and click **Implement**
   - "The moment we approve and implement, EDA picks up the state change and automatically approves the paused workflow node in AAP."
 - Switch back to **AAP** — the workflow should resume within ~10 seconds
 
-### 3.5 — Production Deployment
+### 4.5 — Production Deployment
 
 - "Now it's applying the same kpatch to production — governed, approved, audited."
 - Watch "Apply Kpatch (Prod)" and "Post-checks (Prod)" complete
   - "Same post-checks on prod — kpatch loaded, services healthy, Trading Service UP."
 
-### 3.6 — Post-Implementation Review
+### 4.6 — Post-Implementation Review
 
 - The final node runs
 - Switch to **ServiceNow**:
@@ -156,11 +187,11 @@ sudo kpatch list
 
 ---
 
-## Act 4: The Proof
+## Act 5: The Proof
 
 **Narrative:** "Let me prove the vulnerability is actually gone."
 
-### 4.1 — Prove it on the node
+### 5.1 — Prove it on the node
 
 - SSH back into `rhel-dev-01.trading-demo.chrislab.dev`
 
@@ -181,7 +212,7 @@ rpm -qa | grep kpatch
 
 - "Same kernel version — there was no reboot. But look at `kpatch list` — the module is loaded and the vulnerability is mitigated live in memory. The advisory still shows in dnf because the base kernel RPM hasn't changed, but that's expected — the kpatch is a live in-memory fix. Red Hat Insights understands this and will mark the CVE as remediated."
 
-### 4.2 — Insights update (talk-through)
+### 5.2 — Insights update (talk-through)
 
 - "Red Hat Insights will reflect this remediation after the next check-in cycle — typically within 30 minutes. The insights-client on each node will upload the updated system state, and the CVE will be marked as remediated in the console."
 - If enough time has passed during the demo, refresh Insights to check

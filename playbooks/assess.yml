@@ -14,9 +14,19 @@
       ansible.builtin.set_fact:
         kernel_version: "{{ kernel_version_raw.stdout }}"
 
-    - name: Check for available kpatch-patch RPMs
+    - name: Build kpatch package pattern from kernel version
+      ansible.builtin.shell: |
+        kver=$(uname -r)
+        # Strip arch suffix (.x86_64 etc) and .el9* suffix, then replace dots with underscores
+        base=$(echo "$kver" | sed 's/\.el[0-9_]*\..*$//' | sed 's/\./_/g')
+        echo "kpatch-patch-${base}"
+      register: kpatch_pattern
+      changed_when: false
+
+    - name: Check for available or installed kpatch-patch RPMs
       ansible.builtin.shell: >
-        dnf --showduplicates list available 'kpatch-patch-{{ kernel_version | replace(".", "_") | replace("-", "_") }}*' 2>/dev/null | grep -c kpatch-patch || echo 0
+        (dnf --showduplicates list available '{{ kpatch_pattern.stdout }}*' 2>/dev/null;
+         rpm -qa '{{ kpatch_pattern.stdout }}*' 2>/dev/null) | grep -c kpatch-patch || echo 0
       register: kpatch_available
       changed_when: false
       failed_when: false
