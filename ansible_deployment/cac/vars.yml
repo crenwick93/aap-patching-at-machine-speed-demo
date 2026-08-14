@@ -282,13 +282,9 @@ controller_workflows:
             EDA will auto-approve this node when the CR is approved in ServiceNow.
           timeout: 0
         success_nodes:
-          - "Update CR: Implementing"
+          - "Apply Kpatch (Prod)"
 
       # --- Phase 4: Production Kpatch (governed) ---
-      - identifier: "Update CR: Implementing"
-        unified_job_template: "Update CR: Implementing"
-        success_nodes:
-          - "Apply Kpatch (Prod)"
 
       - identifier: "Apply Kpatch (Prod)"
         unified_job_template: "Apply Kpatch"

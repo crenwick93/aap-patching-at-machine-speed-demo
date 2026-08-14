@@ -24,6 +24,13 @@
 
           {{ audit_report | default('') }}
 
+    - name: Move CR to Review
+      servicenow.itsm.change_request:
+        sys_id: "{{ cr_sys_id }}"
+        state: review
+        other:
+          work_notes: "Implementation complete — moving to review."
+
     - name: Close Change Request
       servicenow.itsm.change_request:
         sys_id: "{{ cr_sys_id }}"
