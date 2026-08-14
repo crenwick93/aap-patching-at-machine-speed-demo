@@ -8,6 +8,7 @@
 
   vars:
     aap_hostname: "{{ lookup('env', 'AAP_HOSTNAME') | default(omit, true) }}"
+    aap_internal_host: "{{ lookup('env', 'AAP_INTERNAL_HOST') | default(aap_hostname, true) }}"
     aap_token: "{{ lookup('env', 'AAP_TOKEN') | default(omit, true) }}"
     aap_validate_certs: "{{ (lookup('env', 'AAP_VALIDATE_CERTS') | default('false', true)) | bool }}"
 

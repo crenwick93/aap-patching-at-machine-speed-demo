@@ -39,7 +39,7 @@ controller_credentials:
     organization: "Default"
     credential_type: "Red Hat Ansible Automation Platform"
     inputs:
-      host: "{{ aap_hostname }}"
+      host: "{{ aap_internal_host }}"
       oauth_token: "{{ aap_token }}"
       verify_ssl: "{{ aap_validate_certs }}"
 
