@@ -143,6 +143,8 @@ bootcmd:
   - [ systemctl, mask, rhcd.service ]
   - [ systemctl, stop, rhcd.service ]
   - [ systemctl, mask, insights-client.timer ]
+  - [ systemctl, mask, rhsmcertd.service ]
+  - [ systemctl, stop, rhsmcertd.service ]
 runcmd:
   - hostnamectl set-hostname ${fqdn}
   - echo '${fqdn}' > /etc/hostname
@@ -239,10 +241,14 @@ else
     for attempt in $(seq 1 $max_attempts); do
       local out
       out=$(ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${hip}" "bash -s" 2>&1 <<REGSCRPT
-# Kill rhcd permanently
+# Kill rhcd and rhsmcertd (auto_registration overwrites our --org)
 sudo systemctl stop rhcd.service 2>/dev/null || true
 sudo systemctl disable rhcd.service 2>/dev/null || true
 sudo systemctl mask rhcd.service 2>/dev/null || true
+sudo systemctl stop rhsmcertd.service 2>/dev/null || true
+sudo systemctl mask rhsmcertd.service 2>/dev/null || true
+# Disable cloud auto-registration so rhsmcertd cannot re-register
+sudo sed -i 's/^auto_registration\s*=.*/auto_registration = 0/' /etc/rhsm/rhsm.conf 2>/dev/null || true
 # Nuke ALL registration and cached state
 sudo insights-client --unregister 2>/dev/null || true
 sudo subscription-manager unregister 2>/dev/null || true
@@ -256,6 +262,12 @@ org=\$(sudo subscription-manager identity 2>&1 | grep 'org name' | awk '{print \
 echo "RHSM_ORG=\${org}"
 # Register and upload to Insights
 sudo insights-client --register 2>&1
+# Re-enable rhsmcertd for cert renewal (auto_registration already disabled)
+sudo systemctl unmask rhsmcertd.service 2>/dev/null || true
+sudo systemctl enable --now rhsmcertd.service 2>/dev/null || true
+# Enable periodic uploads so Insights reflects post-patch state
+sudo systemctl unmask insights-client.timer 2>/dev/null || true
+sudo systemctl enable --now insights-client.timer 2>/dev/null || true
 sudo insights-client 2>&1 | tail -1
 REGSCRPT
 )
