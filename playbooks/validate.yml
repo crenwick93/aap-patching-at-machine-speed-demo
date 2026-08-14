@@ -182,3 +182,41 @@
           strategy_used: "{{ strategy_used | default('kpatch') }}"
           cves_patched: "{{ cve_list | default([]) }}"
         aggregate: false
+
+- name: Update Incident — post-checks passed
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Add work note — dev canary post-checks passed
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_dev_sys_id }}"
+        other:
+          work_notes: |
+            [AUTOMATED] Dev canary post-checks PASSED.
+
+            All services healthy. Trading Service: UP.
+            SBOM diff captured — {{ sbom_diff_summary.added | default([]) | length }} RPMs added.
+            Kpatch active on all dev nodes.
+
+            Dev canary validated — proceeding to raise emergency CR for production.
+      when:
+        - cr_number is not defined
+        - inc_dev_sys_id is defined
+
+    - name: Add work note — production post-checks passed
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_prod_sys_id }}"
+        other:
+          work_notes: |
+            [AUTOMATED] Production post-checks PASSED.
+
+            All services healthy. Trading Service: UP.
+            SBOM diff captured — {{ sbom_diff_summary.added | default([]) | length }} RPMs added.
+            Kpatch active on all production nodes.
+            CMDB CIs updated with new kernel version.
+
+            Proceeding to Post-Implementation Review.
+      when:
+        - cr_number is defined
+        - inc_prod_sys_id is defined

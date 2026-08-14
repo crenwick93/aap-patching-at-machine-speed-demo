@@ -1,9 +1,23 @@
 ---
-- name: Update Prod Incident — kpatch starting
+- name: Update Incident — kpatch starting
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
+    - name: Add work note — applying kpatch to dev canary
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_dev_sys_id }}"
+        other:
+          work_notes: |
+            [AUTOMATED] Applying kpatch to dev canary nodes.
+
+            Strategy: kpatch (live kernel patching — zero downtime)
+            Target hosts: rhel-dev-01, rhel-dev-02, rhel-dev-03
+            AAP Workflow Job: {{ tower_workflow_job_id | default(awx_workflow_job_id | default('N/A')) }}
+      when:
+        - cr_number is not defined
+        - inc_dev_sys_id is defined
+
     - name: Add work note — CR approved, applying kpatch to production
       servicenow.itsm.incident:
         sys_id: "{{ inc_prod_sys_id }}"
@@ -15,7 +29,9 @@
             Strategy: kpatch (live kernel patching — zero downtime)
             Target hosts: rhel-prod-01, rhel-prod-02, rhel-prod-03
             AAP Workflow Job: {{ tower_workflow_job_id | default(awx_workflow_job_id | default('N/A')) }}
-      when: cr_number is defined and inc_prod_sys_id is defined
+      when:
+        - cr_number is defined
+        - inc_prod_sys_id is defined
 
 - name: Apply Kpatch
   hosts: all
@@ -63,11 +79,27 @@
           Reboot required: no
           Zero downtime, zero service interruption.
 
-- name: Update Prod Incident — kpatch applied successfully
+- name: Update Incident — kpatch applied successfully
   hosts: localhost
   connection: local
   gather_facts: false
   tasks:
+    - name: Add work note — kpatch successfully applied to dev canary
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_dev_sys_id }}"
+        other:
+          work_notes: |
+            [AUTOMATED] Kpatch successfully applied to all dev canary nodes.
+
+            CVEs patched: {{ cves_patched | default([]) | join(', ') }}
+            Strategy: kpatch (zero reboot, zero downtime)
+            Patch result: SUCCESS
+
+            Proceeding to raise emergency CR for production deployment.
+      when:
+        - cr_number is not defined
+        - inc_dev_sys_id is defined
+
     - name: Add work note — kpatch successfully applied to production
       servicenow.itsm.incident:
         sys_id: "{{ inc_prod_sys_id }}"
@@ -80,4 +112,6 @@
             Patch result: SUCCESS
 
             Running post-implementation checks now.
-      when: cr_number is defined and inc_prod_sys_id is defined
+      when:
+        - cr_number is defined
+        - inc_prod_sys_id is defined

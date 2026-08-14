@@ -148,6 +148,7 @@ controller_templates:
     project: "Patching at Machine Speed"
     playbook: "playbooks/patch.yml"
     inventory: "Patching Demo"
+    ask_variables_on_launch: true
     ask_limit_on_launch: true
     credentials:
       - "Demo SSH Key"

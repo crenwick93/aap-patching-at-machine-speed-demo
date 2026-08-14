@@ -20,8 +20,10 @@ for arg in "$@"; do
 done
 
 if [[ -f "${REPO_ROOT}/.env" ]]; then
-  # shellcheck disable=SC2046
-  export $(grep -v '^#' "${REPO_ROOT}/.env" | grep -v '^\s*$' | xargs -I{} echo {})
+  set -a
+  # shellcheck disable=SC1091
+  source "${REPO_ROOT}/.env"
+  set +a
 fi
 
 REGION="${AWS_REGION:-eu-west-1}"
@@ -301,29 +303,39 @@ REGSCRPT
   rm -f "$IP_MAP_FILE"
   echo ""
 
-  # Verify: check all hosts report correct account
-  if [[ -n "$RH_ORG" ]]; then
-    echo "  Verifying registration (expecting account ${RH_ORG})..."
-  else
-    echo "  Verifying registration..."
-  fi
-  aws ec2 describe-instances \
+  # Verify and retry any hosts that failed registration
+  echo "  Verifying registration (retry any failures)..."
+  VERIFY_LIST=$(aws ec2 describe-instances \
     --region "$REGION" \
     --filters "Name=tag:demo,Values=patching" "Name=instance-state-name,Values=running" \
     --query "Reservations[].Instances[].{Name:Tags[?Key=='Name']|[0].Value,IP:PublicIpAddress}" \
-    --output json 2>/dev/null | python3 -c "
-import json, sys
-for i in json.load(sys.stdin):
-    print(f\"{i['Name']}:{i['IP']}\")
-" | while IFS=: read -r vname vip; do
+    --output json 2>/dev/null)
+
+  FAILED_HOSTS=""
+  while IFS=: read -r vname vip; do
     vresult=$(ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${vip}" \
       "sudo insights-client --status 2>&1" 2>/dev/null || echo "error")
     if echo "$vresult" | grep -q "confirms registration"; then
       echo "  [OK] ${vname}: registered"
     else
-      echo "  [FAIL] ${vname}: NOT registered"
+      echo "  [MISS] ${vname}: not registered — will retry"
+      FAILED_HOSTS="${FAILED_HOSTS}${vname}:${vip}\n"
     fi
-  done
+  done < <(echo "$VERIFY_LIST" | python3 -c "
+import json, sys
+for i in json.load(sys.stdin):
+    print(f\"{i['Name']}:{i['IP']}\")
+")
+
+  if [[ -n "$FAILED_HOSTS" ]]; then
+    echo ""
+    echo "  Retrying failed registrations sequentially..."
+    while IFS=: read -r fname fip; do
+      [[ -z "$fname" ]] && continue
+      echo "  Registering ${fname}..."
+      register_one "$fname" "$fip"
+    done < <(echo -e "$FAILED_HOSTS")
+  fi
   echo ""
 fi
 

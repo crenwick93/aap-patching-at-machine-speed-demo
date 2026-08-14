@@ -16,8 +16,10 @@ PLAYBOOK="${REPO_ROOT}/ansible_deployment/cac/apply.yml"
 
 if [[ -f "${REPO_ROOT}/.env" ]]; then
   echo "Loading environment from ${REPO_ROOT}/.env"
-  # shellcheck disable=SC2046
-  export $(grep -v '^#' "${REPO_ROOT}/.env" | xargs -I{} echo {})
+  set -a
+  # shellcheck disable=SC1091
+  source "${REPO_ROOT}/.env"
+  set +a
 fi
 
 ansible-playbook "${PLAYBOOK}" "$@"
