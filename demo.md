@@ -15,11 +15,18 @@ Have these open and ready:
 | Red Hat Insights — Systems | console.redhat.com > Insights > Inventory |
 | Red Hat Insights — Vulnerabilities | console.redhat.com > Insights > Vulnerability > CVEs |
 | AAP — Workflow Jobs | AAP > Jobs (filtered to Workflow Jobs) |
-| AAP — Workflow Visualizer | AAP > Templates > CVE Kpatch Response > Visualizer |
-| Terminal | SSH ready to a demo node (e.g. `rhel-dev-01`) |
+| AAP — Workflow Visualizer | AAP > Templates > Trading Platform: CVE Kpatch Response > Visualizer |
+| Terminal | SSH ready: `ssh -i colombo-demo.pem ec2-user@rhel-dev-01.trading-demo.chrislab.dev` |
 | Terminal | Local shell in the repo root for running the simulate script |
 
 Make sure the demo has been reset (`scripts/reset-demo.sh`), ServiceNow is clean (`scripts/cleanup-servicenow.sh --all`), and the EDA rulebook activation is running.
+
+The reset script automatically updates `/etc/hosts` with the current IPs for `rhel-dev-01` and `rhel-prod-01`, so you can SSH using their FQDNs:
+
+```bash
+ssh -i colombo-demo.pem ec2-user@rhel-dev-01.trading-demo.chrislab.dev
+ssh -i colombo-demo.pem ec2-user@rhel-prod-01.trading-demo.chrislab.dev
+```
 
 ---
 
@@ -51,7 +58,7 @@ Make sure the demo has been reset (`scripts/reset-demo.sh`), ServiceNow is clean
 
 ### 1.4 — Prove it on the node itself
 
-- Switch to the **Terminal** (SSH into `rhel-dev-01`)
+- Switch to the **Terminal** (SSH into `rhel-dev-01.trading-demo.chrislab.dev`)
 
 ```bash
 # Show the running kernel
@@ -88,7 +95,7 @@ sudo kpatch list
 ### 2.2 — Show the workflow kick off
 
 - Switch to **AAP — Workflow Jobs**
-  - A new "CVE Kpatch Response" workflow should appear within seconds
+  - A new "Trading Platform: CVE Kpatch Response" workflow should appear within seconds
   - Click into it to show the **Visualizer**
   - "10 nodes in this workflow — assessment, pre-checks, dev canary, governed production deployment, and full ITIL audit trail. All automated."
 
@@ -98,18 +105,18 @@ sudo kpatch list
 
 **Narrative:** Walk through each phase as it executes. The workflow takes a few minutes — use the time to explain what each step is doing.
 
-### 3.1 — Open Incident
+### 3.1 — Assess & SBOM Baseline
 
-- As soon as the "Open Incident" node completes, switch to **ServiceNow**
+- The first node is "Assess & SBOM Baseline" — watch it run in the **Workflow Visualizer**
+- "Before anything else, it scans every node — kernel version, outstanding CVEs, kpatch eligibility, and captures a Software Bill of Materials. We need to know what we're dealing with before raising any tickets."
+
+### 3.2 — Open Incident
+
+- As soon as "Open Incident" completes, switch to **ServiceNow**
 - Show the **Dev service** — a new Incident has appeared
-  - "The automation has immediately opened an incident against the affected service. Full audit trail from second one."
+  - "Now that we know which machines are exposed, the automation opens an incident with the full assessment findings baked in. Not a generic alert — it contains the kernel version, CVE list, and SBOM confirmation."
 - Show the **Prod service** — another Incident
   - "Both environments get their own incident — proper ITIL governance."
-
-### 3.2 — Assess & SBOM Baseline
-
-- Back to the **Workflow Visualizer** — watch "Assess & SBOM Baseline" run
-- "Right now it's scanning every node — kernel version, outstanding CVEs, kpatch eligibility, and capturing a Software Bill of Materials before any changes are made."
 - Once complete, go to **ServiceNow** and check the dev incident's **Work Notes**
   - "See? The automation has written the assessment findings directly into the incident. Every node, kernel version, CVE count — full transparency."
 
@@ -155,7 +162,7 @@ sudo kpatch list
 
 ### 4.1 — Prove it on the node
 
-- SSH back into `rhel-dev-01`
+- SSH back into `rhel-dev-01.trading-demo.chrislab.dev`
 
 ```bash
 # Show kpatch is now loaded (the fix is active)

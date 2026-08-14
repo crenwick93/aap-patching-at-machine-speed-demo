@@ -15,7 +15,7 @@
           - event.payload.payload.advisory_id
       action:
         run_workflow_template:
-          name: "CVE Kpatch Response"
+          name: "Trading Platform: CVE Kpatch Response"
           organization: Default
           job_args:
             extra_vars:

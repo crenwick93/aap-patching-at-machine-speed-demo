@@ -41,8 +41,13 @@
           Advisory: {{ advisory_id | default('RHSA-2026:25217') }}
           Severity: {{ severity | default('Critical') }}
           Synopsis: {{ synopsis | default('Important: kernel security update') }}
-          CVEs: {{ cve_list | default([]) | join(', ') }}
           Trigger host: {{ affected_host | default('N/A') }}
+
+          --- Assessment Findings ---
+          Kernel: {{ kernel_version | default('unknown') }}
+          Kpatch eligible: {{ kpatch_eligible | default('unknown') }}
+          Kernel CVEs found: {{ cve_list | default([]) | join(', ') | default('none') }}
+          Pre-patch SBOM captured: Yes
 
           Affected hosts:
             - rhel-dev-01.{{ domain }}
@@ -74,8 +79,13 @@
           Advisory: {{ advisory_id | default('RHSA-2026:25217') }}
           Severity: {{ severity | default('Critical') }}
           Synopsis: {{ synopsis | default('Important: kernel security update') }}
-          CVEs: {{ cve_list | default([]) | join(', ') }}
           Trigger host: {{ affected_host | default('N/A') }}
+
+          --- Assessment Findings ---
+          Kernel: {{ kernel_version | default('unknown') }}
+          Kpatch eligible: {{ kpatch_eligible | default('unknown') }}
+          Kernel CVEs found: {{ cve_list | default([]) | join(', ') | default('none') }}
+          Pre-patch SBOM captured: Yes
 
           Affected hosts:
             - rhel-prod-01.{{ domain }}
@@ -93,27 +103,33 @@
           business_service: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
       register: inc_prod_result
 
-    - name: Add work notes to Dev Incident
+    - name: Add assessment work notes to Dev Incident
       servicenow.itsm.incident:
         sys_id: "{{ inc_dev_result.record.sys_id }}"
+        state: 2
         other:
           work_notes: |
-            Affected Configuration Items (Dev):
-            - rhel-dev-01.{{ domain }}
-            - rhel-dev-02.{{ domain }}
-            - rhel-dev-03.{{ domain }}
+            [AUTOMATED] Kernel exposure assessment complete.
 
-            Automated canary deployment in progress via AAP.
+            Kernel: {{ kernel_version | default('unknown') }}
+            Kpatch eligible: {{ kpatch_eligible | default('unknown') }}
+            Outstanding kernel CVEs: {{ cve_list | default([]) | join(', ') | default('none') }}
+            Pre-patch SBOM captured on all hosts.
 
-    - name: Add work notes to Prod Incident
+            Proceeding with dev canary kpatch deployment.
+
+    - name: Add assessment work notes to Prod Incident
       servicenow.itsm.incident:
         sys_id: "{{ inc_prod_result.record.sys_id }}"
+        state: 2
         other:
           work_notes: |
-            Affected Configuration Items (Prod):
-            - rhel-prod-01.{{ domain }}
-            - rhel-prod-02.{{ domain }}
-            - rhel-prod-03.{{ domain }}
+            [AUTOMATED] Kernel exposure assessment complete.
+
+            Kernel: {{ kernel_version | default('unknown') }}
+            Kpatch eligible: {{ kpatch_eligible | default('unknown') }}
+            Outstanding kernel CVEs: {{ cve_list | default([]) | join(', ') | default('none') }}
+            Pre-patch SBOM captured on all hosts.
 
             Awaiting dev canary result before proceeding.
             Emergency CR will be raised for production approval.

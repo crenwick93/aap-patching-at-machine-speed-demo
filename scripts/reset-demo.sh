@@ -348,12 +348,51 @@ else
 fi
 
 echo ""
+
+# --- Step 8: Update /etc/hosts for demo SSH convenience ---
+echo "-- Step 8/8: Updating /etc/hosts for demo SSH shortcuts --"
+
+DEMO_HOSTS=("rhel-dev-01" "rhel-prod-01")
+HOSTS_UPDATED=0
+
+DEMO_IPS=$(aws ec2 describe-instances \
+  --region "$REGION" \
+  --filters "Name=tag:Name,Values=rhel-dev-01,rhel-prod-01" "Name=instance-state-name,Values=running" \
+  --query 'Reservations[].Instances[].{Name:Tags[?Key==`Name`].Value|[0],IP:PublicIpAddress}' \
+  --output json 2>/dev/null)
+
+# Remove old demo entries
+sudo sed -i.bak '/\.trading-demo\.chrislab\.dev/d' /etc/hosts 2>/dev/null || \
+  sudo sed -i '' '/\.trading-demo\.chrislab\.dev/d' /etc/hosts 2>/dev/null
+
+for dh in "${DEMO_HOSTS[@]}"; do
+  dip=$(echo "$DEMO_IPS" | python3 -c "
+import json, sys
+for i in json.load(sys.stdin):
+    if i.get('Name') == '${dh}' and i.get('IP'):
+        print(i['IP']); break
+" 2>/dev/null)
+  if [[ -n "$dip" ]]; then
+    echo "${dip} ${dh}.trading-demo.chrislab.dev" | sudo tee -a /etc/hosts > /dev/null
+    echo "  [OK] ${dh}.trading-demo.chrislab.dev -> ${dip}"
+    HOSTS_UPDATED=$((HOSTS_UPDATED + 1))
+  else
+    echo "  [SKIP] Could not resolve IP for ${dh}"
+  fi
+done
+
+if [[ "$HOSTS_UPDATED" -gt 0 ]]; then
+  echo "  You can now: ssh -i colombo-demo.pem ec2-user@rhel-dev-01.trading-demo.chrislab.dev"
+fi
+
+echo ""
 echo "+============================================================+"
 echo "|                    Reset Complete                         |"
 echo "+============================================================+"
 echo "|  * 6 fresh RHEL instances provisioned                    |"
 echo "|  * Hostnames set via cloud-init                          |"
 echo "|  * AAP inventory sync triggered                          |"
+echo "|  * /etc/hosts updated for demo SSH                       |"
 echo "|                                                          |"
 echo "|  Next steps:                                             |"
 echo "|  1. Wait ~60s for inventory sync to complete             |"
