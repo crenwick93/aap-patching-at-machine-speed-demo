@@ -128,8 +128,8 @@ controller_templates:
     credentials:
       - "Demo SSH Key"
 
-  - name: "Validate and Audit"
-    description: "Post-patch: service checks, SBOM diff, CI update, audit artefact"
+  - name: "Post-checks"
+    description: "Verify kpatch loaded, services healthy, Trading Platform UP, SBOM diff, CI update"
     organization: "Default"
     job_type: "run"
     project: "Patching at Machine Speed"
@@ -163,7 +163,7 @@ controller_templates:
     credentials:
       - "ServiceNow PDI"
 
-  - name: "Close Out"
+  - name: "Post-Implementation Review"
     description: "CR to Review + log follow-up CR for full kernel update"
     organization: "Default"
     job_type: "run"
@@ -185,15 +185,6 @@ controller_templates:
     credentials:
       - "AAP Controller"
 
-  - name: "Reset Demo State"
-    description: "Utility: remove kpatch, clean artefacts for demo replay"
-    organization: "Default"
-    job_type: "run"
-    project: "Patching at Machine Speed"
-    playbook: "playbooks/reset.yml"
-    inventory: "Patching Demo"
-    credentials:
-      - "Demo SSH Key"
 
 # -----------------------------------------------------------------------------
 # Workflow: CVE Kpatch Response
@@ -229,10 +220,10 @@ controller_workflows:
         unified_job_template: "Apply Kpatch"
         limit: "tag_env_dev"
         success_nodes:
-          - "Canary: Validate & Audit"
+          - "Canary: Post-checks"
 
-      - identifier: "Canary: Validate & Audit"
-        unified_job_template: "Validate and Audit"
+      - identifier: "Canary: Post-checks"
+        unified_job_template: "Post-checks"
         limit: "tag_env_dev"
         success_nodes:
           - "Open Emergency CR"
@@ -257,17 +248,17 @@ controller_workflows:
         unified_job_template: "Apply Kpatch"
         limit: "tag_env_prod"
         success_nodes:
-          - "Validate & Audit (Prod)"
+          - "Post-checks (Prod)"
 
-      - identifier: "Validate & Audit (Prod)"
-        unified_job_template: "Validate and Audit"
+      - identifier: "Post-checks (Prod)"
+        unified_job_template: "Post-checks"
         limit: "tag_env_prod"
         success_nodes:
-          - "Close Out"
+          - "Post-Implementation Review"
 
-      # --- Phase 4: ITIL Close Out ---
-      - identifier: "Close Out"
-        unified_job_template: "Close Out"
+      # --- Phase 4: Post-Implementation Review ---
+      - identifier: "Post-Implementation Review"
+        unified_job_template: "Post-Implementation Review"
 
 # =============================================================================
 # Event-Driven Ansible

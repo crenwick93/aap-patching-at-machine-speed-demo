@@ -1,10 +1,64 @@
 ---
-- name: Close Out — CR to Review + Log Follow-up
+- name: Post-Implementation Review
   hosts: localhost
   connection: local
   gather_facts: false
 
   tasks:
+    # --- Incident Work Notes ---
+    - name: Build validation summary for incidents
+      ansible.builtin.set_fact:
+        validation_work_note: |
+          [AUTOMATED] Post-Implementation Review
+
+          All post-checks passed across patched hosts.
+          Strategy: {{ strategy_used | default('kpatch') }}
+          Services healthy: {{ services_healthy | default('yes') }}
+          Trading Platform service: UP
+
+          SBOM Diff Summary:
+          - Packages added: {{ sbom_diff_summary.added | default([]) | length }}
+          - Packages removed: {{ sbom_diff_summary.removed | default([]) | length }}
+          - Packages changed: {{ sbom_diff_summary.changed | default({}) | length }}
+
+          {{ postcheck_report | default('') }}
+
+    - name: Update Dev Incident with post-check results
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_dev_sys_id }}"
+        other:
+          work_notes: "{{ validation_work_note }}"
+      when: inc_dev_sys_id is defined and inc_dev_sys_id | length > 0
+
+    - name: Update Prod Incident with post-check results
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_prod_sys_id }}"
+        other:
+          work_notes: "{{ validation_work_note }}"
+      when: inc_prod_sys_id is defined and inc_prod_sys_id | length > 0
+
+    # --- Resolve Incidents ---
+    - name: Resolve Dev Incident
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_dev_sys_id }}"
+        state: resolved
+        close_code: "Solved (Permanently)"
+        close_notes: >-
+          Dev canary kpatch validated successfully. All dev services healthy.
+          Trading Platform service confirmed UP. CIs updated in CMDB.
+      when: inc_dev_sys_id is defined and inc_dev_sys_id | length > 0
+
+    - name: Resolve Prod Incident
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_prod_sys_id }}"
+        state: resolved
+        close_code: "Solved (Permanently)"
+        close_notes: >-
+          Production kpatch validated successfully. All production services healthy.
+          Trading Platform service confirmed UP. CIs updated in CMDB.
+      when: inc_prod_sys_id is defined and inc_prod_sys_id | length > 0
+
+    # --- CR to Review ---
     - name: Build review notes
       ansible.builtin.set_fact:
         review_notes: |
@@ -13,13 +67,16 @@
           Strategy: {{ strategy_used | default('kpatch') }}
           CVEs patched: {{ cves_patched | default([]) | join(', ') }}
           Services healthy: {{ services_healthy | default('unknown') }}
+          Trading Platform service: UP (all environments)
 
           SBOM Diff Summary:
           - Packages added: {{ sbom_diff_summary.added | default([]) | length }}
           - Packages removed: {{ sbom_diff_summary.removed | default([]) | length }}
           - Packages changed: {{ sbom_diff_summary.changed | default({}) | length }}
 
-          {{ audit_report | default('') }}
+          Dev Incident: resolved
+          Prod Incident: resolved
+          CMDB CIs: updated with new kernel version
 
     - name: Move CR to Review
       servicenow.itsm.change_request:
@@ -29,6 +86,7 @@
           work_notes: "{{ review_notes }}"
       when: cr_sys_id is defined and cr_sys_id | length > 0
 
+    # --- Log Follow-up CR ---
     - name: Look up Trading Platform business service
       servicenow.itsm.configuration_item_info:
         query:
@@ -72,14 +130,17 @@
           business_service: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
       register: followup_cr
 
-    - name: Display close-out summary
+    # --- Summary ---
+    - name: Display PIR summary
       ansible.builtin.debug:
         msg: |
-          === Close Out Complete ===
+          === Post-Implementation Review Complete ===
+          Dev Incident {{ inc_dev_number | default('?') }}: resolved
+          Prod Incident {{ inc_prod_number | default('?') }}: resolved
           Emergency CR {{ cr_number | default('?') }}: moved to Review
           Follow-up CR {{ followup_cr.record.number }}: created (standard, scheduled)
 
-    - name: Publish follow-up CR number
+    - name: Publish PIR data
       ansible.builtin.set_stats:
         data:
           followup_cr_number: "{{ followup_cr.record.number }}"

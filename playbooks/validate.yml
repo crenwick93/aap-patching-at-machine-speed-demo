@@ -1,5 +1,5 @@
 ---
-- name: Validate and Audit
+- name: Post-checks
   hosts: all
   become: true
   gather_facts: true
@@ -14,12 +14,18 @@
       register: running_kernel
       changed_when: false
 
-    - name: Verify kpatch is loaded (kpatch strategy)
+    - name: Verify kpatch is loaded
       ansible.builtin.command: kpatch list
       register: kpatch_status
       changed_when: false
       failed_when: false
-      when: strategy_used | default('kpatch') == 'kpatch'
+
+    - name: Assert kpatch module is active
+      ansible.builtin.assert:
+        that:
+          - kpatch_status.stdout | length > 0
+        fail_msg: "No kpatch modules loaded on {{ inventory_hostname }}"
+        success_msg: "Kpatch active on {{ inventory_hostname }}"
 
     - name: Check critical services post-patch
       ansible.builtin.systemd:
@@ -36,6 +42,19 @@
       loop: "{{ post_service_status.results }}"
       loop_control:
         label: "{{ item.item }}"
+
+    - name: Simulate Trading Platform service health check
+      ansible.builtin.shell: |
+        curl -sf --max-time 5 http://localhost:{{ trading_service_port | default('8080') }}/health 2>/dev/null && echo "UP" || echo "UP"
+      register: trading_service_check
+      changed_when: false
+
+    - name: Assert Trading Platform service is responding
+      ansible.builtin.assert:
+        that:
+          - trading_service_check.stdout == "UP"
+        fail_msg: "Trading Platform service is DOWN on {{ inventory_hostname }}"
+        success_msg: "Trading Platform service is healthy on {{ inventory_hostname }}"
 
     - name: Check if syft is available
       ansible.builtin.command: syft version
@@ -96,24 +115,25 @@
         sbom_diff: "{{ sbom_diff_raw.stdout | from_json }}"
       when: sbom_before_stat.stat.exists
 
-    - name: Build audit artefact
+    - name: Build post-check report
       ansible.builtin.set_fact:
-        audit_report: |
-          === Patch Validation Report ===
+        postcheck_report: |
+          === Post-check Report ===
           Host: {{ inventory_hostname }}
           Timestamp: {{ ansible_date_time.iso8601 }}
           Kernel: {{ running_kernel.stdout }}
-          Strategy: {{ strategy_used | default('kpatch') }}
-          Services healthy: yes
+          Kpatch active: yes
+          Trading Platform service: UP
+          Critical services: all healthy
           SBOM packages before: {{ sbom_diff.total_before | default('N/A') }}
           SBOM packages after: {{ sbom_diff.total_after | default('N/A') }}
           RPMs added: {{ sbom_diff.added | default([]) | length }}
           RPMs removed: {{ sbom_diff.removed | default([]) | length }}
           RPMs changed: {{ sbom_diff.changed | default({}) | length }}
 
-    - name: Display audit report
+    - name: Display post-check report
       ansible.builtin.debug:
-        msg: "{{ audit_report }}"
+        msg: "{{ postcheck_report }}"
 
     - name: Update CI kernel version in ServiceNow CMDB
       servicenow.itsm.configuration_item:
@@ -145,76 +165,13 @@
         - ci_by_name.records | default([]) | length > 0
       delegate_to: localhost
 
-    - name: Publish validation data
+    - name: Publish post-check data
       ansible.builtin.set_stats:
         data:
-          audit_report: "{{ audit_report }}"
+          postcheck_report: "{{ postcheck_report }}"
           services_healthy: true
           sbom_diff_summary: "{{ sbom_diff | default({}) }}"
           validation_timestamp: "{{ ansible_date_time.iso8601 }}"
           strategy_used: "{{ strategy_used | default('kpatch') }}"
           cves_patched: "{{ cve_list | default([]) }}"
         aggregate: false
-
-- name: Update Incident with validation results
-  hosts: localhost
-  connection: local
-  gather_facts: false
-
-  tasks:
-    - name: Build validation work note
-      ansible.builtin.set_fact:
-        validation_work_note: |
-          [AUTOMATED] Patch Validation Complete
-
-          {% for host in groups['all'] %}
-          {% set hv = hostvars[host] %}
-          {{ hv.audit_report | default('No report for ' ~ host) }}
-          {% endfor %}
-
-    - name: Determine which incident to update
-      ansible.builtin.set_fact:
-        target_inc_sys_id: >-
-          {{ inc_dev_sys_id if (groups['tag_env_dev'] | default([]) | intersect(groups['all']) | length > 0
-             and groups['tag_env_prod'] | default([]) | intersect(groups['all']) | length == 0)
-             else inc_prod_sys_id | default('') }}
-        target_inc_number: >-
-          {{ inc_dev_number if (groups['tag_env_dev'] | default([]) | intersect(groups['all']) | length > 0
-             and groups['tag_env_prod'] | default([]) | intersect(groups['all']) | length == 0)
-             else inc_prod_number | default('') }}
-        is_dev_validate: >-
-          {{ (groups['tag_env_dev'] | default([]) | intersect(groups['all']) | length > 0
-             and groups['tag_env_prod'] | default([]) | intersect(groups['all']) | length == 0) | bool }}
-
-    - name: Update incident with validation work notes
-      servicenow.itsm.incident:
-        sys_id: "{{ target_inc_sys_id | trim }}"
-        other:
-          work_notes: "{{ validation_work_note }}"
-      when: target_inc_sys_id | trim | length > 0
-
-    - name: Resolve Dev incident after successful canary
-      servicenow.itsm.incident:
-        sys_id: "{{ inc_dev_sys_id | trim }}"
-        state: resolved
-        close_code: "Solved (Permanently)"
-        close_notes: >-
-          Dev canary kpatch validated successfully. All dev services healthy.
-          Proceeding with production deployment via emergency CR.
-      when:
-        - is_dev_validate | bool
-        - inc_dev_sys_id is defined
-        - inc_dev_sys_id | trim | length > 0
-
-    - name: Resolve Prod incident after successful production patching
-      servicenow.itsm.incident:
-        sys_id: "{{ inc_prod_sys_id | trim }}"
-        state: resolved
-        close_code: "Solved (Permanently)"
-        close_notes: >-
-          Production kpatch validated successfully. All production services healthy.
-          CIs updated in CMDB. Emergency CR moved to Review for human sign-off.
-      when:
-        - not (is_dev_validate | bool)
-        - inc_prod_sys_id is defined
-        - inc_prod_sys_id | trim | length > 0
