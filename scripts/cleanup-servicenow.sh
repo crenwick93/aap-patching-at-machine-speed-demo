@@ -99,12 +99,12 @@ delete_cmdb() {
 
   echo ""
   echo "=== Removing demo Application Services ==="
-  delete_ci "cmdb_ci_appl" "Trading Platform (Dev)"
-  delete_ci "cmdb_ci_appl" "Trading Platform (Prod)"
+  delete_ci "cmdb_ci_appl" "Trading Service (Dev)"
+  delete_ci "cmdb_ci_appl" "Trading Service (Prod)"
 
   echo ""
   echo "=== Removing demo Business Service ==="
-  delete_ci "cmdb_ci_service" "Trading Platform"
+  delete_ci "cmdb_ci_service" "Trading Service"
 }
 
 echo "Cleaning up ServiceNow demo artefacts..."

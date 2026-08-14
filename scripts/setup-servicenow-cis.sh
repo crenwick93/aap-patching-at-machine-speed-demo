@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # Register demo CMDB structure in ServiceNow:
-#   Trading Platform (Business Service)
-#   ├── Trading Platform (Dev)  — rhel-dev-01, rhel-dev-02, rhel-dev-03
-#   └── Trading Platform (Prod) — rhel-prod-01, rhel-prod-02, rhel-prod-03
+#   Trading Service (Business Service)
+#   ├── Trading Service (Dev)  — rhel-dev-01, rhel-dev-02, rhel-dev-03
+#   └── Trading Service (Prod) — rhel-prod-01, rhel-prod-02, rhel-prod-03
 #
 # Run this once before the demo to establish the CI baseline.
 #
@@ -64,22 +64,22 @@ echo ""
 
 # --- Business Service ---
 echo "=== Business Service ==="
-biz_id=$(lookup_ci "cmdb_ci_service" "Trading Platform")
+biz_id=$(lookup_ci "cmdb_ci_service" "Trading Service")
 if [[ -n "$biz_id" ]]; then
-  echo "  Trading Platform: already exists (${biz_id})"
+  echo "  Trading Service: already exists (${biz_id})"
 else
   biz_id=$(create_ci "cmdb_ci_service" '{
-    "name": "Trading Platform",
+    "name": "Trading Service",
     "short_description": "Core trading platform — equities, FX, and derivatives",
     "operational_status": "1"
   }')
-  echo "  Trading Platform: created (${biz_id})"
+  echo "  Trading Service: created (${biz_id})"
 fi
 
 # --- Application Services ---
 echo ""
 echo "=== Application Services ==="
-for entry in "Trading Platform (Dev):Development" "Trading Platform (Prod):Production"; do
+for entry in "Trading Service (Dev):Development" "Trading Service (Prod):Production"; do
   app_name="${entry%%:*}"
   app_env="${entry##*:}"
 
@@ -95,7 +95,7 @@ for entry in "Trading Platform (Dev):Development" "Trading Platform (Prod):Produ
     }")
     echo "  ${app_name}: created (${app_id})"
     http=$(create_rel "${biz_id}" "${app_id}" "${DEPENDS_ON}")
-    echo "    -> linked to Trading Platform (HTTP ${http})"
+    echo "    -> linked to Trading Service (HTTP ${http})"
   fi
 
   # Store app IDs for server linking
@@ -135,9 +135,9 @@ for entry in $NODES; do
 
   if [[ "$env_label" == "Development" ]]; then parent_id="$app_dev_id"; else parent_id="$app_prod_id"; fi
   http=$(create_rel "${parent_id}" "${node_id}" "${RUNS_ON}")
-  echo "    -> linked to Trading Platform (${env_label}) (HTTP ${http})"
+  echo "    -> linked to Trading Service (${env_label}) (HTTP ${http})"
 done
 
 echo ""
 echo "CMDB setup complete."
-echo "Open 'Trading Platform' in ServiceNow CMDB to see the full service hierarchy."
+echo "Open 'Trading Service' in ServiceNow CMDB to see the full service hierarchy."

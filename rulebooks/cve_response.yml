@@ -7,7 +7,7 @@
         host: 0.0.0.0
         port: 5000
   rules:
-    - name: Critical CVE detected on Trading Platform host
+    - name: Critical CVE detected on Trading Service host
       condition: event.payload.payload.application is defined and event.payload.payload.application == "vulnerability"
       throttle:
         once_within: 5 minutes
@@ -15,7 +15,7 @@
           - event.payload.payload.advisory_id
       action:
         run_workflow_template:
-          name: "Trading Platform: CVE Kpatch Response"
+          name: "Trading Service: CVE Kpatch Response"
           organization: Default
           job_args:
             extra_vars:

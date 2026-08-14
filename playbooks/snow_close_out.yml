@@ -14,7 +14,7 @@
           All post-checks passed across patched hosts.
           Strategy: {{ strategy_used | default('kpatch') }}
           Services healthy: {{ services_healthy | default('yes') }}
-          Trading Platform service: UP
+          Trading Service service: UP
 
           SBOM Diff Summary:
           - Packages added: {{ sbom_diff_summary.added | default([]) | length }}
@@ -45,7 +45,7 @@
         close_code: "Solved (Permanently)"
         close_notes: >-
           Dev canary kpatch validated successfully. All dev services healthy.
-          Trading Platform service confirmed UP. CIs updated in CMDB.
+          Trading Service service confirmed UP. CIs updated in CMDB.
       when: inc_dev_sys_id is defined and inc_dev_sys_id | length > 0
 
     - name: Resolve Prod Incident
@@ -55,7 +55,7 @@
         close_code: "Solved (Permanently)"
         close_notes: >-
           Production kpatch validated successfully. All production services healthy.
-          Trading Platform service confirmed UP. CIs updated in CMDB.
+          Trading Service service confirmed UP. CIs updated in CMDB.
       when: inc_prod_sys_id is defined and inc_prod_sys_id | length > 0
 
     # --- CR to Review ---
@@ -67,7 +67,7 @@
           Strategy: {{ strategy_used | default('kpatch') }}
           CVEs patched: {{ cves_patched | default([]) | join(', ') }}
           Services healthy: {{ services_healthy | default('unknown') }}
-          Trading Platform service: UP (all environments)
+          Trading Service service: UP (all environments)
 
           SBOM Diff Summary:
           - Packages added: {{ sbom_diff_summary.added | default([]) | length }}
@@ -87,10 +87,10 @@
       when: cr_sys_id is defined and cr_sys_id | length > 0
 
     # --- Log Follow-up CR ---
-    - name: Look up Trading Platform business service
+    - name: Look up Trading Service business service
       servicenow.itsm.configuration_item_info:
         query:
-          - name: = Trading Platform
+          - name: = Trading Service
       register: biz_svc_lookup
 
     - name: Create scheduled CR for follow-up full kernel update

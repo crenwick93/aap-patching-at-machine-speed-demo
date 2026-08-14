@@ -10,12 +10,12 @@ Have these open and ready:
 
 | Tab | URL / Tool |
 |-----|-----------|
-| ServiceNow — Trading Platform (Dev) | Favourited service in ServiceNow |
-| ServiceNow — Trading Platform (Prod) | Favourited service in ServiceNow |
+| ServiceNow — Trading Service (Dev) | Favourited service in ServiceNow |
+| ServiceNow — Trading Service (Prod) | Favourited service in ServiceNow |
 | Red Hat Insights — Systems | console.redhat.com > Insights > Inventory |
 | Red Hat Insights — Vulnerabilities | console.redhat.com > Insights > Vulnerability > CVEs |
 | AAP — Workflow Jobs | AAP > Jobs (filtered to Workflow Jobs) |
-| AAP — Workflow Visualizer | AAP > Templates > Trading Platform: CVE Kpatch Response > Visualizer |
+| AAP — Workflow Visualizer | AAP > Templates > Trading Service: CVE Kpatch Response > Visualizer |
 | Terminal | SSH ready: `ssh -i colombo-demo.pem ec2-user@rhel-dev-01.trading-demo.chrislab.dev` |
 | Terminal | Local shell in the repo root for running the simulate script |
 
@@ -32,14 +32,14 @@ ssh -i colombo-demo.pem ec2-user@rhel-prod-01.trading-demo.chrislab.dev
 
 ## Act 1: The Environment
 
-**Narrative:** "Here's our Trading Platform — a business-critical financial services application running across six RHEL 9 nodes, split into dev and prod."
+**Narrative:** "Here's our Trading Service — a business-critical financial services application running across six RHEL 9 nodes, split into dev and prod."
 
 ### 1.1 — Show the services in ServiceNow
 
-- Open **Trading Platform (Dev)** in ServiceNow
+- Open **Trading Service (Dev)** in ServiceNow
   - Show the 3 dev CIs: `rhel-dev-01`, `rhel-dev-02`, `rhel-dev-03`
   - Point out they're healthy Linux Servers
-- Switch to **Trading Platform (Prod)**
+- Switch to **Trading Service (Prod)**
   - Show the 3 prod CIs: `rhel-prod-01`, `rhel-prod-02`, `rhel-prod-03`
   - "These are the production nodes — this is what we really care about."
 
@@ -95,7 +95,7 @@ sudo kpatch list
 ### 2.2 — Show the workflow kick off
 
 - Switch to **AAP — Workflow Jobs**
-  - A new "Trading Platform: CVE Kpatch Response" workflow should appear within seconds
+  - A new "Trading Service: CVE Kpatch Response" workflow should appear within seconds
   - Click into it to show the **Visualizer**
   - "10 nodes in this workflow — assessment, pre-checks, dev canary, governed production deployment, and full ITIL audit trail. All automated."
 
@@ -125,7 +125,7 @@ sudo kpatch list
 - "Pre-checks confirm it's safe to patch — disk space, memory, services all healthy."
 - "Now watch — it's applying the kpatch to dev first. This is our canary deployment. Zero downtime, the kernel is patched live."
 - After "Canary: Post-checks" completes:
-  - "Post-checks confirmed: kpatch loaded, all services healthy, Trading Platform service is UP. SBOM diff captured — we know exactly what changed."
+  - "Post-checks confirmed: kpatch loaded, all services healthy, Trading Service service is UP. SBOM diff captured — we know exactly what changed."
 
 ### 3.4 — Open Emergency CR + Approval
 
@@ -133,7 +133,7 @@ sudo kpatch list
 - Switch to **ServiceNow**
   - Show the new **Change Request** — it's an emergency CR
   - "The automation has raised a governed change request. Dev canary passed, but production needs human approval. This is the governance gate."
-  - Show the CR details — linked to the Trading Platform service, canary evidence in the description
+  - Show the CR details — linked to the Trading Service service, canary evidence in the description
 - **Approve the CR** in ServiceNow and click **Implement**
   - "The moment we approve and implement, EDA picks up the state change and automatically approves the paused workflow node in AAP."
 - Switch back to **AAP** — the workflow should resume within ~10 seconds
@@ -142,7 +142,7 @@ sudo kpatch list
 
 - "Now it's applying the same kpatch to production — governed, approved, audited."
 - Watch "Apply Kpatch (Prod)" and "Post-checks (Prod)" complete
-  - "Same post-checks on prod — kpatch loaded, services healthy, Trading Platform UP."
+  - "Same post-checks on prod — kpatch loaded, services healthy, Trading Service UP."
 
 ### 3.6 — Post-Implementation Review
 
@@ -212,7 +212,7 @@ Use these throughout the demo as the workflow progresses:
 | ServiceNow CR approval doesn't resume workflow | Check EDA rulebook is polling (look at EDA audit logs). Verify `remote_servicenow_timezone` matches your PDI |
 | Insights not showing systems | Run `sudo insights-client --status` on a node. If not reporting, run `sudo insights-client` to force upload |
 | SSH timeouts to nodes | Your local IP may have changed — update the AWS Security Group |
-| Post-checks fail on Trading Platform service check | This is simulated and always returns UP. If it fails, check the node is reachable |
+| Post-checks fail on Trading Service service check | This is simulated and always returns UP. If it fails, check the node is reachable |
 
 ---
 

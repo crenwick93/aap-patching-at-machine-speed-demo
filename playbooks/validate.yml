@@ -43,18 +43,18 @@
       loop_control:
         label: "{{ item.item }}"
 
-    - name: Simulate Trading Platform service health check
+    - name: Simulate Trading Service service health check
       ansible.builtin.shell: |
         curl -sf --max-time 5 http://localhost:{{ trading_service_port | default('8080') }}/health 2>/dev/null && echo "UP" || echo "UP"
       register: trading_service_check
       changed_when: false
 
-    - name: Assert Trading Platform service is responding
+    - name: Assert Trading Service service is responding
       ansible.builtin.assert:
         that:
           - trading_service_check.stdout == "UP"
-        fail_msg: "Trading Platform service is DOWN on {{ inventory_hostname }}"
-        success_msg: "Trading Platform service is healthy on {{ inventory_hostname }}"
+        fail_msg: "Trading Service service is DOWN on {{ inventory_hostname }}"
+        success_msg: "Trading Service service is healthy on {{ inventory_hostname }}"
 
     - name: Check if syft is available
       ansible.builtin.command: syft version
@@ -123,7 +123,7 @@
           Timestamp: {{ ansible_date_time.iso8601 }}
           Kernel: {{ running_kernel.stdout }}
           Kpatch active: yes
-          Trading Platform service: UP
+          Trading Service service: UP
           Critical services: all healthy
           SBOM packages before: {{ sbom_diff.total_before | default('N/A') }}
           SBOM packages after: {{ sbom_diff.total_after | default('N/A') }}

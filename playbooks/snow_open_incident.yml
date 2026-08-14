@@ -8,22 +8,22 @@
     domain: trading-demo.chrislab.dev
 
   tasks:
-    - name: Look up Trading Platform business service
+    - name: Look up Trading Service business service
       servicenow.itsm.configuration_item_info:
         query:
-          - name: = Trading Platform
+          - name: = Trading Service
       register: biz_svc_lookup
 
-    - name: Look up Trading Platform (Dev) application service
+    - name: Look up Trading Service (Dev) application service
       servicenow.itsm.configuration_item_info:
         query:
-          - name: = Trading Platform (Dev)
+          - name: = Trading Service (Dev)
       register: app_dev_lookup
 
-    - name: Look up Trading Platform (Prod) application service
+    - name: Look up Trading Service (Prod) application service
       servicenow.itsm.configuration_item_info:
         query:
-          - name: = Trading Platform (Prod)
+          - name: = Trading Service (Prod)
       register: app_prod_lookup
 
     - name: Create Dev environment Incident
@@ -33,10 +33,10 @@
         urgency: high
         short_description: >-
           Critical kernel CVE detected — {{ advisory_id | default('RHSA-2026:25217') }}
-          affecting Trading Platform (Dev)
+          affecting Trading Service (Dev)
         description: |
           Red Hat Insights detected a critical kernel security advisory
-          affecting the Trading Platform Dev environment.
+          affecting the Trading Service Dev environment.
 
           Advisory: {{ advisory_id | default('RHSA-2026:25217') }}
           Severity: {{ severity | default('Critical') }}
@@ -71,10 +71,10 @@
         urgency: high
         short_description: >-
           Critical kernel CVE detected — {{ advisory_id | default('RHSA-2026:25217') }}
-          affecting Trading Platform (Prod)
+          affecting Trading Service (Prod)
         description: |
           Red Hat Insights detected a critical kernel security advisory
-          affecting the Trading Platform Prod environment.
+          affecting the Trading Service Prod environment.
 
           Advisory: {{ advisory_id | default('RHSA-2026:25217') }}
           Severity: {{ severity | default('Critical') }}

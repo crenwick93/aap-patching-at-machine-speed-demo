@@ -5,16 +5,16 @@
   gather_facts: false
 
   tasks:
-    - name: Look up Trading Platform business service
+    - name: Look up Trading Service business service
       servicenow.itsm.configuration_item_info:
         query:
-          - name: = Trading Platform
+          - name: = Trading Service
       register: biz_svc_lookup
 
-    - name: Look up Trading Platform (Prod) in CMDB
+    - name: Look up Trading Service (Prod) in CMDB
       servicenow.itsm.configuration_item_info:
         query:
-          - name: = Trading Platform (Prod)
+          - name: = Trading Service (Prod)
       register: app_prod_lookup
 
     - name: Create emergency Change Request with canary evidence
@@ -27,7 +27,7 @@
         description: |
           Red Hat Insights has detected a critical kernel vulnerability
           ({{ advisory_id | default('RHSA-2026:25217') }}) affecting the
-          Trading Platform production fleet.
+          Trading Service production fleet.
 
           A canary deployment has been successfully completed across the
           dev environment with zero service impact. This CR requests
@@ -50,7 +50,7 @@
           business_service: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
           justification: |
             Red Hat Insights has identified {{ advisory_id | default('RHSA-2026:25217') }}
-            as a critical kernel vulnerability (CVSS 8.8) affecting all Trading Platform
+            as a critical kernel vulnerability (CVSS 8.8) affecting all Trading Service
             nodes. The vulnerability allows remote exploitation and must be remediated
             immediately to maintain the security posture of the platform.
 
@@ -58,7 +58,7 @@
             - Dev hosts patched: rhel-dev-01, rhel-dev-02, rhel-dev-03
             - Strategy: kpatch (live kernel patching, zero downtime)
             - Services healthy post-patch: {{ services_healthy | default('yes') }}
-            - Trading Platform service: UP across all dev nodes
+            - Trading Service service: UP across all dev nodes
             - SBOM diff: {{ sbom_diff_summary.changed | default({}) | length }} RPMs changed
 
             {{ audit_report | default('') }}
@@ -66,7 +66,7 @@
             1. Apply kpatch to production nodes (rhel-prod-01, rhel-prod-02, rhel-prod-03)
                using Ansible Automation Platform — live kernel patching, zero reboot.
             2. Run post-checks: verify kpatch loaded, critical services healthy,
-               Trading Platform service responding on all production nodes.
+               Trading Service service responding on all production nodes.
             3. Generate post-patch SBOM and compute diff against baseline.
             4. Update CMDB Configuration Items with new kernel patch level.
             5. Force Red Hat Insights check-in to confirm CVE remediation.
@@ -86,7 +86,7 @@
             Automated post-checks will verify:
             1. kpatch module is loaded and active on each production node.
             2. Critical services (sshd, chronyd) are running.
-            3. Trading Platform service health endpoint responds on each node.
+            3. Trading Service service health endpoint responds on each node.
             4. Post-patch SBOM is generated and diffed against pre-patch baseline.
             5. Red Hat Insights check-in confirms updated system state.
 

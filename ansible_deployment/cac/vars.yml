@@ -1,6 +1,6 @@
 ---
 # =============================================================================
-# AAP Configuration as Code — Trading Platform: CVE Kpatch Response
+# AAP Configuration as Code — Trading Service: CVE Kpatch Response
 # =============================================================================
 
 # Using the Default organization
@@ -129,7 +129,7 @@ controller_templates:
       - "Demo SSH Key"
 
   - name: "Post-checks"
-    description: "Verify kpatch loaded, services healthy, Trading Platform UP, SBOM diff, CI update"
+    description: "Verify kpatch loaded, services healthy, Trading Service UP, SBOM diff, CI update"
     organization: "Default"
     job_type: "run"
     project: "Patching at Machine Speed"
@@ -187,10 +187,10 @@ controller_templates:
 
 
 # -----------------------------------------------------------------------------
-# Workflow: Trading Platform: CVE Kpatch Response
+# Workflow: Trading Service: CVE Kpatch Response
 # -----------------------------------------------------------------------------
 controller_workflows:
-  - name: "Trading Platform: CVE Kpatch Response"
+  - name: "Trading Service: CVE Kpatch Response"
     description: >-
       EDA-triggered workflow: assess exposure, open Incidents, run canary kpatch
       on dev, raise emergency CR for prod, await approval, kpatch prod, close ITIL records.

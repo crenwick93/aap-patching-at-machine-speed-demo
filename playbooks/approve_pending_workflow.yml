@@ -53,7 +53,7 @@
         label: "workflow {{ item.item.summary_fields.workflow_job.id | default('?') }}"
       when:
         - item.json is defined
-        - item.item.summary_fields.workflow_job.name == "Trading Platform: CVE Kpatch Response"
+        - item.item.summary_fields.workflow_job.name == "Trading Service: CVE Kpatch Response"
         - cr_advisory_id | length > 0
         - cr_advisory_id in (item.json.extra_vars | default('') | string)
 
