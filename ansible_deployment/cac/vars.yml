@@ -6,6 +6,23 @@
 # Using the Default organization
 
 # -----------------------------------------------------------------------------
+# Custom Credential Types
+# -----------------------------------------------------------------------------
+controller_credential_types:
+  - name: "Red Hat API Token"
+    description: "Offline token for Red Hat Console APIs (Insights, RHSM)"
+    kind: cloud
+    inputs:
+      fields:
+        - id: rh_offline_token
+          type: string
+          label: "Red Hat Offline Token"
+          secret: true
+    injectors:
+      env:
+        RH_OFFLINE_TOKEN: !unsafe "{{ rh_offline_token }}"
+
+# -----------------------------------------------------------------------------
 # Credentials
 # -----------------------------------------------------------------------------
 controller_credentials:
@@ -42,6 +59,13 @@ controller_credentials:
       host: "{{ aap_internal_host }}"
       oauth_token: "{{ aap_token }}"
       verify_ssl: "{{ aap_validate_certs }}"
+
+  - name: "Red Hat Console API"
+    description: "Offline token for Red Hat Insights API — used to update CVE status"
+    organization: "Default"
+    credential_type: "Red Hat API Token"
+    inputs:
+      rh_offline_token: "{{ rh_offline_token }}"
 
 # -----------------------------------------------------------------------------
 # Projects
@@ -165,7 +189,7 @@ controller_templates:
       - "ServiceNow PDI"
 
   - name: "Post-Implementation Review"
-    description: "CR to Review + log follow-up CR for full kernel update"
+    description: "CR to Review, update Insights CVE status + log follow-up CR"
     organization: "Default"
     job_type: "run"
     project: "Patching at Machine Speed"
@@ -174,6 +198,7 @@ controller_templates:
     ask_variables_on_launch: true
     credentials:
       - "ServiceNow PDI"
+      - "Red Hat Console API"
 
   - name: "Bridge CR Approval"
     description: "Relay ServiceNow CR approval to the paused AAP workflow node"

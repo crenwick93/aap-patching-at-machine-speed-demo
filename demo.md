@@ -210,13 +210,25 @@ sudo dnf updateinfo info --security kernel 2>/dev/null | grep -A2 "CVE-2026-4303
 rpm -qa | grep kpatch
 ```
 
-- "Same kernel version — there was no reboot. But look at `kpatch list` — the module is loaded and the vulnerability is mitigated live in memory. The advisory still shows in dnf because the base kernel RPM hasn't changed, but that's expected — the kpatch is a live in-memory fix. Red Hat Insights understands this and will mark the CVE as remediated."
+- "Same kernel version — there was no reboot. But look at `kpatch list` — the module is loaded and the vulnerability is mitigated live in memory."
 
-### 5.2 — Insights update (talk-through)
+### 5.2 — Insights resolution
 
-- "Red Hat Insights will reflect this remediation after the next check-in cycle — typically within 30 minutes. The insights-client on each node will upload the updated system state, and the CVE will be marked as remediated in the console."
-- If enough time has passed during the demo, refresh Insights to check
-- If not, this is fine to narrate: "In a real environment, your security team would see this CVE disappear from their dashboard without ever having to touch a terminal."
+- Navigate to **Red Hat Insights — Vulnerabilities** and refresh
+- "Notice the CVE status has been updated to **Resolved via Mitigation** for all 6 systems. The Post-Implementation Review step didn't just close out ServiceNow — it called the Red Hat Insights API to mark the CVE as mitigated."
+- "This is critical for two reasons:"
+  1. "It stops Insights from re-firing vulnerability events for this CVE — no duplicate workflows."
+  2. "It gives your security team an accurate picture: the vulnerability is mitigated *now*, with a follow-up CR logged for the permanent kernel update."
+- Show the incident work notes — they include the Insights status update confirmation
+- "The follow-up CR also explicitly states that the CVE is marked as Resolved via Mitigation in Insights. When the full kernel update is applied later, Insights will automatically clear the advisory entirely."
+
+### 5.3 — The full audit trail
+
+- Walk through ServiceNow:
+  - **Incidents**: Dev and Prod — both resolved with detailed work notes showing the full timeline
+  - **Emergency CR**: In Review state — ready for human sign-off
+  - **Follow-up CR**: Standard change logged for the full kernel update within 30 days
+- "Every step from detection to resolution, including the Insights API update, is documented in ServiceNow. This is a complete ITIL audit trail, generated automatically."
 
 ---
 
@@ -231,6 +243,7 @@ Use these throughout the demo as the workflow progresses:
 - **Human in the loop**: "Production deployment requires an approved change request. The automation pauses and waits — governance is not optional."
 - **SBOM**: "We capture a full Software Bill of Materials before and after every patch. You know exactly what changed on every system."
 - **Follow-up CR**: "The automation knows kpatch is temporary. It automatically schedules the full kernel update for the next maintenance window."
+- **Insights closed-loop**: "The automation doesn't just patch — it tells Red Hat Insights the CVE is mitigated. No duplicate events, no manual status updates, no noise for the SOC team."
 - **Scale**: "This same workflow works whether you have 6 nodes or 6,000. The only thing that changes is how many hosts Ansible targets."
 
 ---

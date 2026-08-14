@@ -35,6 +35,8 @@
 
     eda_event_stream_token: "{{ lookup('env', 'EDA_EVENT_STREAM_TOKEN') | default(omit, true) }}"
 
+    rh_offline_token: "{{ lookup('env', 'RH_OFFLINE_TOKEN') | default(omit, true) }}"
+
   vars_files:
     - vars.yml
   roles:

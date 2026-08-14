@@ -14,7 +14,7 @@
           All post-checks passed across patched hosts.
           Strategy: {{ strategy_used | default('kpatch') }}
           Services healthy: {{ services_healthy | default('yes') }}
-          Trading Service service: UP
+          Trading Service: UP
 
           SBOM Diff Summary:
           - Packages added: {{ sbom_diff_summary.added | default([]) | length }}
@@ -45,7 +45,7 @@
         close_code: "Solved (Permanently)"
         close_notes: >-
           Dev canary kpatch validated successfully. All dev services healthy.
-          Trading Service service confirmed UP. CIs updated in CMDB.
+          Trading Service confirmed UP. CIs updated in CMDB.
       when: inc_dev_sys_id is defined and inc_dev_sys_id | length > 0
 
     - name: Resolve Prod Incident
@@ -55,8 +55,92 @@
         close_code: "Solved (Permanently)"
         close_notes: >-
           Production kpatch validated successfully. All production services healthy.
-          Trading Service service confirmed UP. CIs updated in CMDB.
+          Trading Service confirmed UP. CIs updated in CMDB.
       when: inc_prod_sys_id is defined and inc_prod_sys_id | length > 0
+
+    # --- Update Red Hat Insights CVE Status ---
+    - name: Get Red Hat SSO access token
+      ansible.builtin.uri:
+        url: https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: refresh_token
+          client_id: rhsm-api
+          refresh_token: "{{ lookup('env', 'RH_OFFLINE_TOKEN') }}"
+        return_content: true
+      register: sso_token
+      no_log: true
+      when: lookup('env', 'RH_OFFLINE_TOKEN') | length > 0
+
+    - name: Look up Insights inventory UUIDs for demo systems
+      ansible.builtin.uri:
+        url: "https://console.redhat.com/api/inventory/v1/hosts?display_name=trading-demo&per_page=50"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ sso_token.json.access_token }}"
+        return_content: true
+      register: insights_hosts
+      when: sso_token is succeeded
+
+    - name: Build list of Insights inventory IDs
+      ansible.builtin.set_fact:
+        insights_inventory_ids: "{{ insights_hosts.json.results | map(attribute='id') | list }}"
+      when: insights_hosts is succeeded
+
+    - name: Mark CVE as Resolved via Mitigation in Red Hat Insights
+      ansible.builtin.uri:
+        url: https://console.redhat.com/api/vulnerability/v1/status
+        method: PATCH
+        headers:
+          Authorization: "Bearer {{ sso_token.json.access_token }}"
+          Content-Type: application/vnd.api+json
+        body_format: json
+        body:
+          cve: "{{ triggered_cve | default('CVE-2026-43037') }}"
+          inventory_id: "{{ insights_inventory_ids }}"
+          status_id: 6
+          status_text: >-
+            Mitigated via kpatch (live kernel patch) — applied by AAP automation.
+            Emergency CR {{ cr_number | default('N/A') }}.
+            Follow-up full kernel update scheduled.
+        status_code: 200
+      register: insights_status_result
+      when:
+        - sso_token is succeeded
+        - insights_inventory_ids | default([]) | length > 0
+
+    - name: Add Insights status work note to Dev Incident
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_dev_sys_id }}"
+        other:
+          work_notes: |
+            [AUTOMATED] Red Hat Insights CVE status updated.
+
+            {{ triggered_cve | default('CVE-2026-43037') }} marked as "Resolved via Mitigation"
+            across {{ insights_inventory_ids | default([]) | length }} systems in Red Hat Insights.
+
+            No further vulnerability events will fire for this CVE on these systems.
+            A follow-up CR has been raised for the permanent full kernel update.
+      when:
+        - inc_dev_sys_id is defined and inc_dev_sys_id | length > 0
+        - insights_status_result is succeeded
+
+    - name: Add Insights status work note to Prod Incident
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_prod_sys_id }}"
+        other:
+          work_notes: |
+            [AUTOMATED] Red Hat Insights CVE status updated.
+
+            {{ triggered_cve | default('CVE-2026-43037') }} marked as "Resolved via Mitigation"
+            across {{ insights_inventory_ids | default([]) | length }} systems in Red Hat Insights.
+
+            No further vulnerability events will fire for this CVE on these systems.
+            A follow-up CR has been raised for the permanent full kernel update.
+      when:
+        - inc_prod_sys_id is defined and inc_prod_sys_id | length > 0
+        - insights_status_result is succeeded
 
     # --- CR to Review ---
     - name: Build review notes
@@ -67,13 +151,14 @@
           Strategy: {{ strategy_used | default('kpatch') }}
           CVEs patched: {{ cves_patched | default([]) | join(', ') }}
           Services healthy: {{ services_healthy | default('unknown') }}
-          Trading Service service: UP (all environments)
+          Trading Service: UP (all environments)
 
           SBOM Diff Summary:
           - Packages added: {{ sbom_diff_summary.added | default([]) | length }}
           - Packages removed: {{ sbom_diff_summary.removed | default([]) | length }}
           - Packages changed: {{ sbom_diff_summary.changed | default({}) | length }}
 
+          Red Hat Insights: CVE marked as "Resolved via Mitigation" on {{ insights_inventory_ids | default([]) | length }} systems
           Dev Incident: resolved
           Prod Incident: resolved
           CMDB CIs: updated with new kernel version
@@ -101,17 +186,18 @@
           [SCHEDULED] Full kernel update required — follow-up to {{ cr_number | default('emergency kpatch') }}
         description: |
           A kpatch was applied to mitigate immediate CVE risk across all environments
-          (dev canary + production), but kpatch is a stop-gap measure. Red Hat mandates
-          a full kernel update and reboot at least twice per year to remain within the
-          supported patch cadence.
+          (dev canary + production). The CVE has been marked as "Resolved via Mitigation"
+          in Red Hat Insights, so no further vulnerability events will fire.
 
-          This CR tracks the follow-up full kernel update that should be completed
-          during the next scheduled maintenance window.
+          However, kpatch is a live in-memory fix — it does not update the installed
+          kernel RPM. A full kernel update and reboot is required to permanently resolve
+          the advisory and remain within Red Hat's supported patch cadence.
 
           Related emergency CR: {{ cr_number | default('N/A') }}
           Advisory: {{ advisory_id | default('N/A') }}
           Kernel: {{ kernel_version | default('unknown') }}
           CVEs mitigated by kpatch: {{ cves_patched | default([]) | join(', ') }}
+          Insights status: Resolved via Mitigation (will revert to active after full update)
 
           Hosts requiring full kernel update + reboot:
           - rhel-dev-01.trading-demo.chrislab.dev
@@ -139,6 +225,7 @@
           Prod Incident {{ inc_prod_number | default('?') }}: resolved
           Emergency CR {{ cr_number | default('?') }}: moved to Review
           Follow-up CR {{ followup_cr.record.number }}: created (standard, scheduled)
+          Insights: CVE marked as Resolved via Mitigation on {{ insights_inventory_ids | default([]) | length }} systems
 
     - name: Publish PIR data
       ansible.builtin.set_stats:
