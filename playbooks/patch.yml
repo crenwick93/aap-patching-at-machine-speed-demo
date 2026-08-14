@@ -1,4 +1,22 @@
 ---
+- name: Update Prod Incident — kpatch starting
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Add work note — CR approved, applying kpatch to production
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_prod_sys_id }}"
+        other:
+          work_notes: |
+            [AUTOMATED] Emergency CR {{ cr_number }} has been approved.
+            Applying kpatch to production nodes now.
+
+            Strategy: kpatch (live kernel patching — zero downtime)
+            Target hosts: rhel-prod-01, rhel-prod-02, rhel-prod-03
+            AAP Workflow Job: {{ tower_workflow_job_id | default(awx_workflow_job_id | default('N/A')) }}
+      when: cr_number is defined and inc_prod_sys_id is defined
+
 - name: Apply Kpatch
   hosts: all
   become: true
@@ -44,3 +62,22 @@
           CVEs patched: {{ kpatch_cves.stdout_lines | default([]) | length }}
           Reboot required: no
           Zero downtime, zero service interruption.
+
+- name: Update Prod Incident — kpatch applied successfully
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Add work note — kpatch successfully applied to production
+      servicenow.itsm.incident:
+        sys_id: "{{ inc_prod_sys_id }}"
+        other:
+          work_notes: |
+            [AUTOMATED] Kpatch successfully applied to all production nodes.
+
+            CVEs patched: {{ cves_patched | default([]) | join(', ') }}
+            Strategy: kpatch (zero reboot, zero downtime)
+            Patch result: SUCCESS
+
+            Running post-implementation checks now.
+      when: cr_number is defined and inc_prod_sys_id is defined

@@ -127,6 +127,7 @@ controller_templates:
     ask_limit_on_launch: true
     credentials:
       - "Demo SSH Key"
+      - "ServiceNow PDI"
 
   - name: "Post-checks"
     description: "Verify kpatch loaded, services healthy, Trading Service UP, SBOM diff, CI update"

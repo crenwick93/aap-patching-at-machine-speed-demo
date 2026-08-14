@@ -59,20 +59,27 @@
             - Strategy: kpatch (live kernel patching, zero downtime)
             - Services healthy post-patch: {{ services_healthy | default('yes') }}
             - Trading Service service: UP across all dev nodes
-            - SBOM diff: {{ sbom_diff_summary.changed | default({}) | length }} RPMs changed
+            - SBOM diff: {{ sbom_diff_summary.added | default([]) | length }} RPMs added, {{ sbom_diff_summary.changed | default({}) | length }} RPMs changed
 
             {{ audit_report | default('') }}
           implementation_plan: |
+            Implementation is fully automated by Ansible Automation Platform.
+            AAP Workflow Job ID: {{ tower_workflow_job_id | default(awx_workflow_job_id | default('N/A')) }}
+
+            When this CR is approved and moved to the Implement state in ServiceNow,
+            Event-Driven Ansible will detect the state change and automatically resume
+            the paused workflow to execute the following steps:
+
             1. Apply kpatch to production nodes (rhel-prod-01, rhel-prod-02, rhel-prod-03)
-               using Ansible Automation Platform — live kernel patching, zero reboot.
+               — live kernel patching, zero reboot required.
             2. Run post-checks: verify kpatch loaded, critical services healthy,
-               Trading Service service responding on all production nodes.
+               Trading Service responding on all production nodes.
             3. Generate post-patch SBOM and compute diff against baseline.
             4. Update CMDB Configuration Items with new kernel patch level.
             5. Force Red Hat Insights check-in to confirm CVE remediation.
             6. Resolve production incident and move this CR to Review.
 
-            Estimated duration: < 5 minutes
+            Estimated duration: < 5 minutes from approval
             Service impact: None (live kernel patching)
           backout_plan: |
             If post-checks fail on any production node:
