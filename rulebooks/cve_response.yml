@@ -34,6 +34,7 @@
         sysparm_query: >
           short_descriptionLIKEEmergency kpatch^
           ORDERBYDESCsys_updated_on^ORDERBYDESCsys_id
+        remote_servicenow_timezone: "Europe/London"
         filters:
           - ansible.eda.json_filter:
           - ansible.eda.normalize_keys:
