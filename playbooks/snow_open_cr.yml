@@ -37,7 +37,7 @@
           Severity: {{ severity | default('Critical') }}
           Kernel: {{ kernel_version | default('unknown') }}
           CVEs: {{ cve_list | default([]) | join(', ') }}
-          Related Dev Incident: {{ inc_number | default('N/A') }}
+          Related Dev Incident: {{ inc_dev_number | default('N/A') }}
           Related Prod Incident: {{ inc_prod_number | default('N/A') }}
         priority: 1
         risk: low
@@ -45,7 +45,7 @@
         category: Software
         assignment_group: "CAB Approval"
         other:
-          parent: "{{ inc_prod_sys_id | default(inc_sys_id) | default(omit) }}"
+          parent: "{{ inc_prod_sys_id | default(inc_dev_sys_id) | default(omit) }}"
           cmdb_ci: "{{ app_prod_lookup.records[0].sys_id | default(omit) }}"
           business_service: "{{ biz_svc_lookup.records[0].sys_id | default(omit) }}"
           justification: |
@@ -111,12 +111,12 @@
 
     - name: Update Dev Incident with CR reference
       servicenow.itsm.incident:
-        sys_id: "{{ inc_sys_id }}"
+        sys_id: "{{ inc_dev_sys_id }}"
         other:
           work_notes: >-
             Dev canary deployment completed successfully.
             Emergency CR {{ cr_result.record.number }} raised for production kpatch.
-      when: inc_sys_id is defined
+      when: inc_dev_sys_id is defined
 
     - name: Update Prod Incident with CR reference
       servicenow.itsm.incident:
@@ -133,7 +133,7 @@
           === Emergency Change Request Created ===
           Number: {{ cr_result.record.number }}
           Sys ID: {{ cr_result.record.sys_id }}
-          Linked to Incident: {{ inc_number | default('N/A') }}
+          Linked to Incident: {{ inc_dev_number | default('N/A') }}
           Dev canary: PASSED
           Awaiting approval for production kpatch.
 

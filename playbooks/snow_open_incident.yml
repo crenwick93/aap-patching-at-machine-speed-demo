@@ -146,8 +146,8 @@
     - name: Publish Incident identifiers
       ansible.builtin.set_stats:
         data:
-          inc_sys_id: "{{ inc_dev_result.record.sys_id }}"
-          inc_number: "{{ inc_dev_result.record.number }}"
+          inc_dev_sys_id: "{{ inc_dev_result.record.sys_id }}"
+          inc_dev_number: "{{ inc_dev_result.record.number }}"
           inc_prod_sys_id: "{{ inc_prod_result.record.sys_id }}"
           inc_prod_number: "{{ inc_prod_result.record.number }}"
         aggregate: false
