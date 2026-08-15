@@ -61,6 +61,9 @@ ssh -i colombo-demo.pem ec2-user@rhel-prod-01.trading-demo.chrislab.dev
 - Switch to the **Terminal** (SSH into `rhel-dev-01.trading-demo.chrislab.dev`)
 
 ```bash
+# Confirm which node we're on (matches the display name in Insights)
+hostname
+
 # Show the running kernel
 uname -r
 
@@ -71,7 +74,8 @@ sudo dnf updateinfo info --security kernel 2>/dev/null | grep -A2 "CVE-2026-4303
 sudo kpatch list
 ```
 
-- "You can see the same vulnerability Insights is reporting — CVE-2026-43037, CVSS 8.8, sitting unpatched on this node right now. And no kpatch modules are loaded — this kernel is exposed."
+- "This is `rhel-dev-01.trading-demo.chrislab.dev` — the same system you just saw in Insights. Same hostname, same node."
+- "The CVE is right there — CVE-2026-43037, CVSS 8.8, sitting unpatched. And `kpatch list` is empty — this kernel is exposed."
 
 ---
 
@@ -201,16 +205,10 @@ sudo kpatch list
 
 # Show the kernel is still running (same version — zero reboot)
 uname -r
-
-# The CVE advisory still shows in dnf (kpatch doesn't change RPM state)
-# but the kpatch module is what provides the live fix
-sudo dnf updateinfo info --security kernel 2>/dev/null | grep -A2 "CVE-2026-43037"
-
-# Show the kpatch RPMs that were installed
-rpm -qa | grep kpatch
 ```
 
-- "Same kernel version — there was no reboot. But look at `kpatch list` — the module is loaded and the vulnerability is mitigated live in memory."
+- "Before the workflow, `kpatch list` was empty — nothing loaded. Now look — the CVE module is loaded and active. The vulnerability is mitigated live in memory."
+- "And the kernel version is identical — there was no reboot. Zero downtime."
 
 ### 5.2 — Insights resolution
 
@@ -244,6 +242,7 @@ Use these throughout the demo as the workflow progresses:
 - **SBOM**: "We capture a full Software Bill of Materials before and after every patch. You know exactly what changed on every system."
 - **Follow-up CR**: "The automation knows kpatch is temporary. It automatically schedules the full kernel update for the next maintenance window."
 - **Insights closed-loop**: "The automation doesn't just patch — it tells Red Hat Insights the CVE is mitigated. No duplicate events, no manual status updates, no noise for the SOC team."
+  - **If asked "why doesn't Insights know automatically?":** "Insights uses OVAL scanning which checks installed RPM versions. Kpatch patches the running kernel live in memory — it doesn't change the kernel RPM. So the scanner still sees the old version and flags the CVE. That's why we call the Insights API to mark it as Resolved via Mitigation. Without this, your SOC team would see a false positive and EDA would keep firing. A full kernel update clears it automatically — that's what the follow-up CR is for."
 - **Scale**: "This same workflow works whether you have 6 nodes or 6,000. The only thing that changes is how many hosts Ansible targets."
 
 ---

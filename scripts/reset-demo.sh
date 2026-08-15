@@ -337,6 +337,27 @@ for i in json.load(sys.stdin):
     done < <(echo -e "$FAILED_HOSTS")
   fi
   echo ""
+
+  # Install kpatch on all nodes (needed for demo CLI commands)
+  echo "  Installing kpatch on all nodes..."
+  while IFS=: read -r pname pip; do
+    if [[ -n "$pip" ]]; then
+      ssh $SSH_OPTS -i "$SSH_KEY" "${SSH_USER}@${pip}" \
+        "sudo dnf install -y kpatch > /dev/null 2>&1 && echo ok || echo fail" \
+        2>/dev/null &
+    fi
+  done < <(aws ec2 describe-instances \
+    --region "$REGION" \
+    --filters "Name=tag:demo,Values=patching" "Name=instance-state-name,Values=running" \
+    --query "Reservations[].Instances[].{Name:Tags[?Key=='Name']|[0].Value,IP:PublicIpAddress}" \
+    --output json 2>/dev/null | python3 -c "
+import json, sys
+for i in json.load(sys.stdin):
+    print(f\"{i['Name']}:{i['IP']}\")
+")
+  wait
+  echo "  [OK] kpatch installed"
+  echo ""
 fi
 
 # --- Step 7: Sync AAP inventory ---
